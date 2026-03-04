@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
+import { IconChevronDown, IconChevronUp, IconCopy, IconInfo, IconPencil, IconTrash2 } from '@/components/ui/icons';
 import { ConfigSection } from '@/components/config/ConfigSection';
 import { useNotificationStore } from '@/stores';
 import styles from './VisualConfigEditor.module.scss';
@@ -39,24 +40,65 @@ type ToggleRowProps = {
   onChange: (value: boolean) => void;
 };
 
-function ToggleRow({ title, description, checked, disabled, onChange }: ToggleRowProps) {
+type PayloadBlockKey = 'defaultRules' | 'overrideRules' | 'filterRules';
+
+type PayloadSummary = {
+  ruleCount: number;
+  modelCount: number;
+  paramCount: number;
+};
+
+function summarizePayloadRules<T extends { models: unknown[]; params: unknown[] }>(rules: T[]): PayloadSummary {
+  return rules.reduce(
+    (summary, rule) => ({
+      ruleCount: summary.ruleCount + 1,
+      modelCount: summary.modelCount + rule.models.length,
+      paramCount: summary.paramCount + rule.params.length,
+    }),
+    { ruleCount: 0, modelCount: 0, paramCount: 0 }
+  );
+}
+
+function HintBadge({ text, focusable = true }: { text: ReactNode; focusable?: boolean }) {
+  const textLabel = typeof text === 'string' ? text : '说明';
+
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 16,
-        flexWrap: 'wrap',
-      }}
-    >
-      <div style={{ minWidth: 220 }}>
-        <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{title}</div>
-        {description && (
-          <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
-            {description}
-          </div>
-        )}
+    <span className={styles.toggleHint}>
+      <span
+        className={styles.toggleHintTrigger}
+        tabIndex={focusable ? 0 : undefined}
+        aria-label={focusable ? textLabel : undefined}
+      >
+        <IconInfo size={12} />
+      </span>
+      <span className={styles.toggleHintTooltip} role="tooltip">
+        {text}
+      </span>
+    </span>
+  );
+}
+
+function LabelWithHint({ label, hint }: { label: string; hint: ReactNode }) {
+  return (
+    <span className={styles.inlineLabelWithHint}>
+      <span>{label}</span>
+      <HintBadge text={hint} />
+    </span>
+  );
+}
+
+function ToggleRow({ title, description, checked, disabled, onChange }: ToggleRowProps) {
+  const descriptionTitle = typeof description === 'string' ? description : undefined;
+
+  return (
+    <div className={styles.toggleRow}>
+      <div className={styles.toggleText}>
+        <div className={styles.toggleTitleRow}>
+          <div className={styles.toggleTitle}>{title}</div>
+          {description && (
+            <HintBadge text={descriptionTitle ?? description} />
+          )}
+        </div>
       </div>
       <ToggleSwitch checked={checked} onChange={onChange} disabled={disabled} ariaLabel={title} />
     </div>
@@ -64,21 +106,65 @@ function ToggleRow({ title, description, checked, disabled, onChange }: ToggleRo
 }
 
 function SectionGrid({ children }: { children: ReactNode }) {
-  return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-        gap: 16,
-      }}
-    >
-      {children}
-    </div>
-  );
+  return <div className={styles.sectionGrid}>{children}</div>;
 }
 
 function Divider() {
-  return <div style={{ height: 1, background: 'var(--border-color)', margin: '16px 0' }} />;
+  return <div className={styles.divider} />;
+}
+
+function PayloadSectionBlock({
+  title,
+  description,
+  summary,
+  expanded,
+  onToggle,
+  children,
+}: {
+  title: string;
+  description: string;
+  summary: PayloadSummary;
+  expanded: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div className={styles.payloadSectionBlock}>
+      <button
+        type="button"
+        className={styles.payloadSectionHeader}
+        onClick={onToggle}
+        aria-expanded={expanded}
+      >
+        <div className={styles.payloadSectionHeading}>
+          <div className={styles.payloadSectionTitleRow}>
+            <div className={styles.payloadSectionTitle}>{title}</div>
+            <HintBadge text={description} focusable={false} />
+          </div>
+        </div>
+        <div className={styles.payloadSectionMeta}>
+          <span className={styles.payloadSectionStat}>
+            <strong>{summary.ruleCount}</strong>
+            <span>{t('config_management.visual.payload_rules.rule')}</span>
+          </span>
+          <span className={styles.payloadSectionStat}>
+            <strong>{summary.modelCount}</strong>
+            <span>{t('config_management.visual.payload_rules.models')}</span>
+          </span>
+          <span className={styles.payloadSectionStat}>
+            <strong>{summary.paramCount}</strong>
+            <span>{t('config_management.visual.payload_rules.params')}</span>
+          </span>
+          <span className={styles.payloadSectionChevron}>
+            {expanded ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
+          </span>
+        </div>
+      </button>
+      {expanded && <div className={styles.payloadSectionBody}>{children}</div>}
+    </div>
+  );
 }
 
 function ApiKeysCardEditor({
@@ -175,56 +261,78 @@ function ApiKeysCardEditor({
   };
 
   return (
-    <div className="form-group" style={{ marginBottom: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <label style={{ margin: 0 }}>{t('config_management.visual.api_keys.label')}</label>
+    <div className={`form-group ${styles.compactFormGroup}`}>
+      <div className={styles.apiKeysHeader}>
+        <div className={styles.apiKeysMeta}>
+          <label className={styles.apiKeysLabel}>
+            <span>{t('config_management.visual.api_keys.label')}</span>
+            <HintBadge text={t('config_management.visual.api_keys.hint')} />
+          </label>
+          <span className={styles.apiKeysCount}>{apiKeys.length}</span>
+        </div>
         <Button size="sm" onClick={openAddModal} disabled={disabled}>
           {t('config_management.visual.api_keys.add')}
         </Button>
       </div>
 
       {apiKeys.length === 0 ? (
-        <div
-          style={{
-            border: '1px dashed var(--border-color)',
-            borderRadius: 12,
-            padding: 16,
-            color: 'var(--text-secondary)',
-            textAlign: 'center',
-          }}
-        >
+        <div className={styles.apiKeysEmpty}>
           {t('config_management.visual.api_keys.empty')}
         </div>
       ) : (
-        <div className="item-list" style={{ marginTop: 4 }}>
+        <div className={styles.apiKeysList}>
           {apiKeys.map((key, index) => (
-            <div key={`${key}-${index}`} className="item-row">
-              <div className="item-meta">
-                <div className="pill">#{index + 1}</div>
-                <div className="item-title">API Key</div>
-                <div className="item-subtitle">{maskApiKey(String(key || ''))}</div>
-              </div>
-              <div className="item-actions">
-                <Button variant="secondary" size="sm" onClick={() => handleCopy(key)} disabled={disabled}>
-                  {t('common.copy')}
-                </Button>
-                <Button variant="secondary" size="sm" onClick={() => openEditModal(index)} disabled={disabled}>
-                  {t('config_management.visual.common.edit')}
-                </Button>
-                <Button variant="danger" size="sm" onClick={() => handleDelete(index)} disabled={disabled}>
-                  {t('config_management.visual.common.delete')}
-                </Button>
+            <div key={`${key}-${index}`} className={styles.apiKeyRow}>
+              <div className={styles.apiKeyLine}>
+                <span className={styles.apiKeyIndex}>#{index + 1}</span>
+                <div className={styles.apiKeyValue} title={maskApiKey(String(key || ''))}>
+                  {maskApiKey(String(key || ''))}
+                </div>
+                <div className={styles.apiKeyActions}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className={styles.iconActionButton}
+                    onClick={() => handleCopy(key)}
+                    disabled={disabled}
+                    title={t('common.copy')}
+                    aria-label={t('common.copy')}
+                  >
+                    <IconCopy size={16} />
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className={styles.iconActionButton}
+                    onClick={() => openEditModal(index)}
+                    disabled={disabled}
+                    title={t('config_management.visual.common.edit')}
+                    aria-label={t('config_management.visual.common.edit')}
+                  >
+                    <IconPencil size={16} />
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    className={styles.iconActionButton}
+                    onClick={() => handleDelete(index)}
+                    disabled={disabled}
+                    title={t('config_management.visual.common.delete')}
+                    aria-label={t('config_management.visual.common.delete')}
+                  >
+                    <IconTrash2 size={16} />
+                  </Button>
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      <div className="hint">{t('config_management.visual.api_keys.hint')}</div>
-
       <Modal
         open={modalOpen}
         onClose={closeModal}
+        className={styles.apiKeyModal}
         title={editingIndex !== null ? t('config_management.visual.api_keys.edit_title') : t('config_management.visual.api_keys.add_title')}
         footer={
           <>
@@ -245,7 +353,7 @@ function ApiKeysCardEditor({
           disabled={disabled}
           error={formError || undefined}
           hint={t('config_management.visual.api_keys.input_hint')}
-          style={{ paddingRight: 148 }}
+          className={styles.apiKeyInput}
           rightElement={
             <Button
               type="button"
@@ -259,51 +367,6 @@ function ApiKeysCardEditor({
           }
         />
       </Modal>
-    </div>
-  );
-}
-
-function StringListEditor({
-  value,
-  disabled,
-  placeholder,
-  onChange,
-}: {
-  value: string[];
-  disabled?: boolean;
-  placeholder?: string;
-  onChange: (next: string[]) => void;
-}) {
-  const { t } = useTranslation();
-  const items = value.length ? value : [];
-
-  const updateItem = (index: number, nextValue: string) =>
-    onChange(items.map((item, i) => (i === index ? nextValue : item)));
-  const addItem = () => onChange([...items, '']);
-  const removeItem = (index: number) => onChange(items.filter((_, i) => i !== index));
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {items.map((item, index) => (
-        <div key={index} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <input
-            className="input"
-            placeholder={placeholder}
-            value={item}
-            onChange={(e) => updateItem(index, e.target.value)}
-            disabled={disabled}
-            style={{ flex: 1 }}
-          />
-          <Button variant="ghost" size="sm" onClick={() => removeItem(index)} disabled={disabled}>
-            {t('config_management.visual.common.delete')}
-          </Button>
-        </div>
-      ))}
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <Button variant="secondary" size="sm" onClick={addItem} disabled={disabled}>
-          {t('config_management.visual.common.add')}
-        </Button>
-      </div>
     </div>
   );
 }
@@ -401,166 +464,226 @@ function PayloadRulesEditor({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div className={styles.ruleEditor}>
       {rules.map((rule, ruleIndex) => (
-        <div
-          key={rule.id}
-          style={{
-            border: '1px solid var(--border-color)',
-            borderRadius: 12,
-            padding: 12,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 12,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: 12,
-              flexWrap: 'wrap',
-            }}
-          >
-            <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{t('config_management.visual.payload_rules.rule')} {ruleIndex + 1}</div>
-            <Button variant="ghost" size="sm" onClick={() => removeRule(ruleIndex)} disabled={disabled}>
-              {t('config_management.visual.common.delete')}
+        <div key={rule.id} className={styles.ruleCard}>
+          <div className={styles.ruleHeader}>
+            <div className={styles.ruleHeaderMain}>
+              <div className={styles.ruleTitle}>
+                {t('config_management.visual.payload_rules.rule')} {ruleIndex + 1}
+              </div>
+            </div>
+            <Button
+              variant="danger"
+              size="sm"
+              className={styles.iconActionButton}
+              onClick={() => removeRule(ruleIndex)}
+              disabled={disabled}
+              title={t('config_management.visual.common.delete')}
+              aria-label={t('config_management.visual.common.delete')}
+            >
+              <IconTrash2 size={16} />
             </Button>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{t('config_management.visual.payload_rules.models')}</div>
-            {(rule.models.length ? rule.models : []).map((model, modelIndex) => (
-              <div
-                key={model.id}
-                className={[styles.payloadRuleModelRow, protocolFirst ? styles.payloadRuleModelRowProtocolFirst : '']
-                  .filter(Boolean)
-                  .join(' ')}
-              >
-                {protocolFirst ? (
-                  <>
-                    <Select
-                      value={model.protocol ?? ''}
-                      options={protocolOptions}
-                      disabled={disabled}
-                      ariaLabel={t('config_management.visual.payload_rules.provider_type')}
-                      onChange={(nextValue) =>
-                        updateModel(ruleIndex, modelIndex, {
-                          protocol: (nextValue || undefined) as PayloadModelEntry['protocol'],
-                        })
-                      }
-                    />
-                    <input
-                      className="input"
-                      placeholder={t('config_management.visual.payload_rules.model_name')}
-                      value={model.name}
-                      onChange={(e) => updateModel(ruleIndex, modelIndex, { name: e.target.value })}
-                      disabled={disabled}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <input
-                      className="input"
-                      placeholder={t('config_management.visual.payload_rules.model_name')}
-                      value={model.name}
-                      onChange={(e) => updateModel(ruleIndex, modelIndex, { name: e.target.value })}
-                      disabled={disabled}
-                    />
-                    <Select
-                      value={model.protocol ?? ''}
-                      options={protocolOptions}
-                      disabled={disabled}
-                      ariaLabel={t('config_management.visual.payload_rules.provider_type')}
-                      onChange={(nextValue) =>
-                        updateModel(ruleIndex, modelIndex, {
-                          protocol: (nextValue || undefined) as PayloadModelEntry['protocol'],
-                        })
-                      }
-                    />
-                  </>
-                )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={styles.payloadRowActionButton}
-                  onClick={() => removeModel(ruleIndex, modelIndex)}
-                  disabled={disabled}
-                >
-                  {t('config_management.visual.common.delete')}
-                </Button>
+          <div className={styles.ruleGroup}>
+            <div className={styles.ruleGroupHeader}>
+              <div className={styles.ruleGroupTitle}>
+                <span className={styles.ruleGroupLabel}>
+                  {t('config_management.visual.payload_rules.models')}
+                </span>
+                <span className={styles.ruleGroupCount}>{rule.models.length}</span>
               </div>
-            ))}
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <Button variant="secondary" size="sm" onClick={() => addModel(ruleIndex)} disabled={disabled}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => addModel(ruleIndex)}
+                disabled={disabled}
+              >
                 {t('config_management.visual.payload_rules.add_model')}
               </Button>
             </div>
+            <div className={styles.ruleGroupBody}>
+              {rule.models.length > 0 && (
+                <div
+                  className={[
+                    styles.groupRowHeader,
+                    protocolFirst ? styles.groupRowHeaderModelProtocolFirst : styles.groupRowHeaderModel,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  {protocolFirst ? (
+                    <>
+                      <span>{t('config_management.visual.payload_rules.provider_type')}</span>
+                      <span>{t('config_management.visual.payload_rules.model_name')}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>{t('config_management.visual.payload_rules.model_name')}</span>
+                      <span>{t('config_management.visual.payload_rules.provider_type')}</span>
+                    </>
+                  )}
+                  <span className={styles.groupRowHeaderAction} />
+                </div>
+              )}
+              {(rule.models.length ? rule.models : []).map((model, modelIndex) => (
+                <div
+                  key={model.id}
+                  className={[
+                    styles.payloadRuleModelRow,
+                    protocolFirst ? styles.payloadRuleModelRowProtocolFirst : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  {protocolFirst ? (
+                    <>
+                      <Select
+                        value={model.protocol ?? ''}
+                        options={protocolOptions}
+                        disabled={disabled}
+                        ariaLabel={t('config_management.visual.payload_rules.provider_type')}
+                        onChange={(nextValue) =>
+                          updateModel(ruleIndex, modelIndex, {
+                            protocol: (nextValue || undefined) as PayloadModelEntry['protocol'],
+                          })
+                        }
+                      />
+                      <input
+                        className="input"
+                        placeholder={t('config_management.visual.payload_rules.model_name')}
+                        value={model.name}
+                        onChange={(e) => updateModel(ruleIndex, modelIndex, { name: e.target.value })}
+                        disabled={disabled}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <input
+                        className="input"
+                        placeholder={t('config_management.visual.payload_rules.model_name')}
+                        value={model.name}
+                        onChange={(e) => updateModel(ruleIndex, modelIndex, { name: e.target.value })}
+                        disabled={disabled}
+                      />
+                      <Select
+                        value={model.protocol ?? ''}
+                        options={protocolOptions}
+                        disabled={disabled}
+                        ariaLabel={t('config_management.visual.payload_rules.provider_type')}
+                        onChange={(nextValue) =>
+                          updateModel(ruleIndex, modelIndex, {
+                            protocol: (nextValue || undefined) as PayloadModelEntry['protocol'],
+                          })
+                        }
+                      />
+                    </>
+                  )}
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    className={styles.payloadRowActionButton}
+                    onClick={() => removeModel(ruleIndex, modelIndex)}
+                    disabled={disabled}
+                    title={t('config_management.visual.common.delete')}
+                    aria-label={t('config_management.visual.common.delete')}
+                  >
+                    <IconTrash2 size={16} />
+                  </Button>
+                </div>
+              ))}
+              {rule.models.length === 0 && (
+                <div className={styles.groupEmpty}>
+                  {t('config_management.visual.payload_rules.no_rules')}
+                </div>
+              )}
+            </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{t('config_management.visual.payload_rules.params')}</div>
-            {(rule.params.length ? rule.params : []).map((param, paramIndex) => (
-              <div key={param.id} className={styles.payloadRuleParamRow}>
-                <input
-                  className="input"
-                  placeholder={t('config_management.visual.payload_rules.json_path')}
-                  value={param.path}
-                  onChange={(e) => updateParam(ruleIndex, paramIndex, { path: e.target.value })}
-                  disabled={disabled}
-                />
-                <Select
-                  value={param.valueType}
-                  options={payloadValueTypeOptions}
-                  disabled={disabled}
-                  ariaLabel={t('config_management.visual.payload_rules.param_type')}
-                  onChange={(nextValue) =>
-                    updateParam(ruleIndex, paramIndex, { valueType: nextValue as PayloadParamValueType })
-                  }
-                />
-                <input
-                  className="input"
-                  placeholder={getValuePlaceholder(param.valueType)}
-                  value={param.value}
-                  onChange={(e) => updateParam(ruleIndex, paramIndex, { value: e.target.value })}
-                  disabled={disabled}
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={styles.payloadRowActionButton}
-                  onClick={() => removeParam(ruleIndex, paramIndex)}
-                  disabled={disabled}
-                >
-                  {t('config_management.visual.common.delete')}
-                </Button>
+          <div className={styles.ruleGroup}>
+            <div className={styles.ruleGroupHeader}>
+              <div className={styles.ruleGroupTitle}>
+                <span className={styles.ruleGroupLabel}>
+                  {t('config_management.visual.payload_rules.params')}
+                </span>
+                <span className={styles.ruleGroupCount}>{rule.params.length}</span>
               </div>
-            ))}
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <Button variant="secondary" size="sm" onClick={() => addParam(ruleIndex)} disabled={disabled}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => addParam(ruleIndex)}
+                disabled={disabled}
+              >
                 {t('config_management.visual.payload_rules.add_param')}
               </Button>
+            </div>
+            <div className={styles.ruleGroupBody}>
+              {rule.params.length > 0 && (
+                <div className={`${styles.groupRowHeader} ${styles.groupRowHeaderParam}`}>
+                  <span>{t('config_management.visual.payload_rules.json_path')}</span>
+                  <span>{t('config_management.visual.payload_rules.param_type')}</span>
+                  <span>{t('config_management.visual.payload_rules.value_default')}</span>
+                  <span className={styles.groupRowHeaderAction} />
+                </div>
+              )}
+              {(rule.params.length ? rule.params : []).map((param, paramIndex) => (
+                <div key={param.id} className={styles.payloadRuleParamRow}>
+                  <input
+                    className="input"
+                    placeholder={t('config_management.visual.payload_rules.json_path')}
+                    value={param.path}
+                    onChange={(e) => updateParam(ruleIndex, paramIndex, { path: e.target.value })}
+                    disabled={disabled}
+                  />
+                  <Select
+                    value={param.valueType}
+                    options={payloadValueTypeOptions}
+                    disabled={disabled}
+                    ariaLabel={t('config_management.visual.payload_rules.param_type')}
+                    onChange={(nextValue) =>
+                      updateParam(ruleIndex, paramIndex, {
+                        valueType: nextValue as PayloadParamValueType,
+                      })
+                    }
+                  />
+                  <input
+                    className="input"
+                    placeholder={getValuePlaceholder(param.valueType)}
+                    value={param.value}
+                    onChange={(e) => updateParam(ruleIndex, paramIndex, { value: e.target.value })}
+                    disabled={disabled}
+                  />
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    className={styles.payloadRowActionButton}
+                    onClick={() => removeParam(ruleIndex, paramIndex)}
+                    disabled={disabled}
+                    title={t('config_management.visual.common.delete')}
+                    aria-label={t('config_management.visual.common.delete')}
+                  >
+                    <IconTrash2 size={16} />
+                  </Button>
+                </div>
+              ))}
+              {rule.params.length === 0 && (
+                <div className={styles.groupEmpty}>
+                  {t('config_management.visual.payload_rules.no_rules')}
+                </div>
+              )}
             </div>
           </div>
         </div>
       ))}
 
       {rules.length === 0 && (
-        <div
-          style={{
-            border: '1px dashed var(--border-color)',
-            borderRadius: 12,
-            padding: 16,
-            color: 'var(--text-secondary)',
-            textAlign: 'center',
-          }}
-        >
+        <div className={styles.ruleEmpty}>
           {t('config_management.visual.payload_rules.no_rules')}
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+      <div className={styles.actionsEnd}>
         <Button variant="secondary" size="sm" onClick={addRule} disabled={disabled}>
           {t('config_management.visual.payload_rules.add_rule')}
         </Button>
@@ -613,102 +736,165 @@ function PayloadFilterRulesEditor({
     });
   };
 
+  const addParam = (ruleIndex: number) => {
+    const rule = rules[ruleIndex];
+    updateRule(ruleIndex, { params: [...rule.params, ''] });
+  };
+
+  const removeParam = (ruleIndex: number, paramIndex: number) => {
+    const rule = rules[ruleIndex];
+    updateRule(ruleIndex, { params: rule.params.filter((_, i) => i !== paramIndex) });
+  };
+
+  const updateParam = (ruleIndex: number, paramIndex: number, nextValue: string) => {
+    const rule = rules[ruleIndex];
+    updateRule(ruleIndex, {
+      params: rule.params.map((item, i) => (i === paramIndex ? nextValue : item)),
+    });
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div className={styles.ruleEditor}>
       {rules.map((rule, ruleIndex) => (
-        <div
-          key={rule.id}
-          style={{
-            border: '1px solid var(--border-color)',
-            borderRadius: 12,
-            padding: 12,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 12,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: 12,
-              flexWrap: 'wrap',
-            }}
-          >
-            <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{t('config_management.visual.payload_rules.rule')} {ruleIndex + 1}</div>
-            <Button variant="ghost" size="sm" onClick={() => removeRule(ruleIndex)} disabled={disabled}>
-              {t('config_management.visual.common.delete')}
+        <div key={rule.id} className={styles.ruleCard}>
+          <div className={styles.ruleHeader}>
+            <div className={styles.ruleHeaderMain}>
+              <div className={styles.ruleTitle}>
+                {t('config_management.visual.payload_rules.rule')} {ruleIndex + 1}
+              </div>
+            </div>
+            <Button
+              variant="danger"
+              size="sm"
+              className={styles.iconActionButton}
+              onClick={() => removeRule(ruleIndex)}
+              disabled={disabled}
+              title={t('config_management.visual.common.delete')}
+              aria-label={t('config_management.visual.common.delete')}
+            >
+              <IconTrash2 size={16} />
             </Button>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{t('config_management.visual.payload_rules.models')}</div>
-            {rule.models.map((model, modelIndex) => (
-              <div key={model.id} className={styles.payloadFilterModelRow}>
-                <input
-                  className="input"
-                  placeholder={t('config_management.visual.payload_rules.model_name')}
-                  value={model.name}
-                  onChange={(e) => updateModel(ruleIndex, modelIndex, { name: e.target.value })}
-                  disabled={disabled}
-                />
-                <Select
-                  value={model.protocol ?? ''}
-                  options={protocolOptions}
-                  disabled={disabled}
-                  ariaLabel={t('config_management.visual.payload_rules.provider_type')}
-                  onChange={(nextValue) =>
-                    updateModel(ruleIndex, modelIndex, {
-                      protocol: (nextValue || undefined) as PayloadModelEntry['protocol'],
-                    })
-                  }
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={styles.payloadRowActionButton}
-                  onClick={() => removeModel(ruleIndex, modelIndex)}
-                  disabled={disabled}
-                >
-                  {t('config_management.visual.common.delete')}
-                </Button>
+          <div className={styles.ruleGroup}>
+            <div className={styles.ruleGroupHeader}>
+              <div className={styles.ruleGroupTitle}>
+                <span className={styles.ruleGroupLabel}>
+                  {t('config_management.visual.payload_rules.models')}
+                </span>
+                <span className={styles.ruleGroupCount}>{rule.models.length}</span>
               </div>
-            ))}
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <Button variant="secondary" size="sm" onClick={() => addModel(ruleIndex)} disabled={disabled}>
                 {t('config_management.visual.payload_rules.add_model')}
               </Button>
             </div>
+            <div className={styles.ruleGroupBody}>
+              {rule.models.length > 0 && (
+                <div className={`${styles.groupRowHeader} ${styles.groupRowHeaderFilterModel}`}>
+                  <span>{t('config_management.visual.payload_rules.model_name')}</span>
+                  <span>{t('config_management.visual.payload_rules.provider_type')}</span>
+                  <span className={styles.groupRowHeaderAction} />
+                </div>
+              )}
+              {rule.models.map((model, modelIndex) => (
+                <div key={model.id} className={styles.payloadFilterModelRow}>
+                  <input
+                    className="input"
+                    placeholder={t('config_management.visual.payload_rules.model_name')}
+                    value={model.name}
+                    onChange={(e) => updateModel(ruleIndex, modelIndex, { name: e.target.value })}
+                    disabled={disabled}
+                  />
+                  <Select
+                    value={model.protocol ?? ''}
+                    options={protocolOptions}
+                    disabled={disabled}
+                    ariaLabel={t('config_management.visual.payload_rules.provider_type')}
+                    onChange={(nextValue) =>
+                      updateModel(ruleIndex, modelIndex, {
+                        protocol: (nextValue || undefined) as PayloadModelEntry['protocol'],
+                      })
+                    }
+                  />
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    className={styles.payloadRowActionButton}
+                    onClick={() => removeModel(ruleIndex, modelIndex)}
+                    disabled={disabled}
+                    title={t('config_management.visual.common.delete')}
+                    aria-label={t('config_management.visual.common.delete')}
+                  >
+                    <IconTrash2 size={16} />
+                  </Button>
+                </div>
+              ))}
+              {rule.models.length === 0 && (
+                <div className={styles.groupEmpty}>
+                  {t('config_management.visual.payload_rules.no_rules')}
+                </div>
+              )}
+            </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{t('config_management.visual.payload_rules.remove_params')}</div>
-            <StringListEditor
-              value={rule.params}
-              disabled={disabled}
-              placeholder={t('config_management.visual.payload_rules.json_path_filter')}
-              onChange={(params) => updateRule(ruleIndex, { params })}
-            />
+          <div className={styles.ruleGroup}>
+            <div className={styles.ruleGroupHeader}>
+              <div className={styles.ruleGroupTitle}>
+                <span className={styles.ruleGroupLabel}>
+                  {t('config_management.visual.payload_rules.remove_params')}
+                </span>
+                <span className={styles.ruleGroupCount}>{rule.params.length}</span>
+              </div>
+              <Button variant="secondary" size="sm" onClick={() => addParam(ruleIndex)} disabled={disabled}>
+                {t('config_management.visual.payload_rules.add_param')}
+              </Button>
+            </div>
+            <div className={styles.ruleGroupBody}>
+              {rule.params.length > 0 && (
+                <div className={`${styles.groupRowHeader} ${styles.groupRowHeaderString}`}>
+                  <span>{t('config_management.visual.payload_rules.json_path_filter')}</span>
+                  <span className={styles.groupRowHeaderAction} />
+                </div>
+              )}
+              {rule.params.map((item, paramIndex) => (
+                <div key={`${rule.id}-${paramIndex}`} className={styles.stringRow}>
+                  <input
+                    placeholder={t('config_management.visual.payload_rules.json_path_filter')}
+                    value={item}
+                    onChange={(e) => updateParam(ruleIndex, paramIndex, e.target.value)}
+                    disabled={disabled}
+                    className={`${styles.stringInput} input`}
+                  />
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    className={styles.iconActionButton}
+                    onClick={() => removeParam(ruleIndex, paramIndex)}
+                    disabled={disabled}
+                    title={t('config_management.visual.common.delete')}
+                    aria-label={t('config_management.visual.common.delete')}
+                  >
+                    <IconTrash2 size={16} />
+                  </Button>
+                </div>
+              ))}
+              {rule.params.length === 0 && (
+                <div className={styles.groupEmpty}>
+                  {t('config_management.visual.payload_rules.no_rules')}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       ))}
 
       {rules.length === 0 && (
-        <div
-          style={{
-            border: '1px dashed var(--border-color)',
-            borderRadius: 12,
-            padding: 16,
-            color: 'var(--text-secondary)',
-            textAlign: 'center',
-          }}
-        >
+        <div className={styles.ruleEmpty}>
           {t('config_management.visual.payload_rules.no_rules')}
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+      <div className={styles.actionsEnd}>
         <Button variant="secondary" size="sm" onClick={addRule} disabled={disabled}>
           {t('config_management.visual.payload_rules.add_rule')}
         </Button>
@@ -722,371 +908,399 @@ export function VisualConfigEditor({ values, disabled = false, onChange }: Visua
   const isKeepaliveDisabled = values.streaming.keepaliveSeconds === '' || values.streaming.keepaliveSeconds === '0';
   const isNonstreamKeepaliveDisabled =
     values.streaming.nonstreamKeepaliveInterval === '' || values.streaming.nonstreamKeepaliveInterval === '0';
+  const [expandedPayloadSections, setExpandedPayloadSections] = useState<Record<PayloadBlockKey, boolean>>({
+    defaultRules: true,
+    overrideRules: false,
+    filterRules: false,
+  });
+  const payloadDefaultSummary = useMemo(
+    () => summarizePayloadRules(values.payloadDefaultRules),
+    [values.payloadDefaultRules]
+  );
+  const payloadOverrideSummary = useMemo(
+    () => summarizePayloadRules(values.payloadOverrideRules),
+    [values.payloadOverrideRules]
+  );
+  const payloadFilterSummary = useMemo(
+    () => summarizePayloadRules(values.payloadFilterRules),
+    [values.payloadFilterRules]
+  );
+
+  const togglePayloadSection = (section: PayloadBlockKey) => {
+    setExpandedPayloadSections((prev) => ({
+      ...prev,
+      [section]: !prev[section],
+    }));
+  };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className={styles.editorRoot}>
       <ConfigSection title={t('config_management.visual.sections.server.title')} description={t('config_management.visual.sections.server.description')}>
-        <SectionGrid>
-          <Input
-            label={t('config_management.visual.sections.server.host')}
-            placeholder="0.0.0.0"
-            value={values.host}
-            onChange={(e) => onChange({ host: e.target.value })}
-            disabled={disabled}
-          />
-          <Input
-            label={t('config_management.visual.sections.server.port')}
-            type="number"
-            placeholder="8317"
-            value={values.port}
-            onChange={(e) => onChange({ port: e.target.value })}
-            disabled={disabled}
-          />
-        </SectionGrid>
+          <SectionGrid>
+            <Input
+              label={t('config_management.visual.sections.server.host')}
+              placeholder="0.0.0.0"
+              value={values.host}
+              onChange={(e) => onChange({ host: e.target.value })}
+              disabled={disabled}
+            />
+            <Input
+              label={t('config_management.visual.sections.server.port')}
+              type="number"
+              placeholder="8317"
+              value={values.port}
+              onChange={(e) => onChange({ port: e.target.value })}
+              disabled={disabled}
+            />
+          </SectionGrid>
       </ConfigSection>
 
       <ConfigSection title={t('config_management.visual.sections.tls.title')} description={t('config_management.visual.sections.tls.description')}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <ToggleRow
-            title={t('config_management.visual.sections.tls.enable')}
-            description={t('config_management.visual.sections.tls.enable_desc')}
-            checked={values.tlsEnable}
-            disabled={disabled}
-            onChange={(tlsEnable) => onChange({ tlsEnable })}
-          />
-          {values.tlsEnable && (
-            <>
-              <Divider />
-              <SectionGrid>
-                <Input
-                  label={t('config_management.visual.sections.tls.cert')}
-                  placeholder="/path/to/cert.pem"
-                  value={values.tlsCert}
-                  onChange={(e) => onChange({ tlsCert: e.target.value })}
-                  disabled={disabled}
-                />
-                <Input
-                  label={t('config_management.visual.sections.tls.key')}
-                  placeholder="/path/to/key.pem"
-                  value={values.tlsKey}
-                  onChange={(e) => onChange({ tlsKey: e.target.value })}
-                  disabled={disabled}
-                />
-              </SectionGrid>
-            </>
-          )}
-        </div>
+          <div className={styles.sectionStack}>
+            <ToggleRow
+              title={t('config_management.visual.sections.tls.enable')}
+              description={t('config_management.visual.sections.tls.enable_desc')}
+              checked={values.tlsEnable}
+              disabled={disabled}
+              onChange={(tlsEnable) => onChange({ tlsEnable })}
+            />
+            {values.tlsEnable && (
+              <>
+                <Divider />
+                <SectionGrid>
+                  <Input
+                    label={t('config_management.visual.sections.tls.cert')}
+                    placeholder="/path/to/cert.pem"
+                    value={values.tlsCert}
+                    onChange={(e) => onChange({ tlsCert: e.target.value })}
+                    disabled={disabled}
+                  />
+                  <Input
+                    label={t('config_management.visual.sections.tls.key')}
+                    placeholder="/path/to/key.pem"
+                    value={values.tlsKey}
+                    onChange={(e) => onChange({ tlsKey: e.target.value })}
+                    disabled={disabled}
+                  />
+                </SectionGrid>
+                </>
+              )}
+          </div>
       </ConfigSection>
 
       <ConfigSection title={t('config_management.visual.sections.remote.title')} description={t('config_management.visual.sections.remote.description')}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <ToggleRow
-            title={t('config_management.visual.sections.remote.allow_remote')}
-            description={t('config_management.visual.sections.remote.allow_remote_desc')}
-            checked={values.rmAllowRemote}
-            disabled={disabled}
-            onChange={(rmAllowRemote) => onChange({ rmAllowRemote })}
-          />
-          <ToggleRow
-            title={t('config_management.visual.sections.remote.disable_panel')}
-            description={t('config_management.visual.sections.remote.disable_panel_desc')}
-            checked={values.rmDisableControlPanel}
-            disabled={disabled}
-            onChange={(rmDisableControlPanel) => onChange({ rmDisableControlPanel })}
-          />
-          <SectionGrid>
-            <Input
-              label={t('config_management.visual.sections.remote.secret_key')}
-              type="password"
-              placeholder={t('config_management.visual.sections.remote.secret_key_placeholder')}
-              value={values.rmSecretKey}
-              onChange={(e) => onChange({ rmSecretKey: e.target.value })}
-              disabled={disabled}
-            />
-            <Input
-              label={t('config_management.visual.sections.remote.panel_repo')}
-              placeholder="https://github.com/router-for-me/Cli-Proxy-API-Management-Center"
-              value={values.rmPanelRepo}
-              onChange={(e) => onChange({ rmPanelRepo: e.target.value })}
-              disabled={disabled}
-            />
-          </SectionGrid>
-        </div>
+          <div className={styles.sectionStack}>
+            <div className={styles.toggleGrid}>
+              <ToggleRow
+                title={t('config_management.visual.sections.remote.allow_remote')}
+                description={t('config_management.visual.sections.remote.allow_remote_desc')}
+                checked={values.rmAllowRemote}
+                disabled={disabled}
+                onChange={(rmAllowRemote) => onChange({ rmAllowRemote })}
+              />
+              <ToggleRow
+                title={t('config_management.visual.sections.remote.disable_panel')}
+                description={t('config_management.visual.sections.remote.disable_panel_desc')}
+                checked={values.rmDisableControlPanel}
+                disabled={disabled}
+                onChange={(rmDisableControlPanel) => onChange({ rmDisableControlPanel })}
+              />
+            </div>
+            <SectionGrid>
+              <Input
+                label={t('config_management.visual.sections.remote.secret_key')}
+                type="password"
+                placeholder={t('config_management.visual.sections.remote.secret_key_placeholder')}
+                value={values.rmSecretKey}
+                onChange={(e) => onChange({ rmSecretKey: e.target.value })}
+                disabled={disabled}
+              />
+              <Input
+                label={t('config_management.visual.sections.remote.panel_repo')}
+                placeholder="https://github.com/router-for-me/Cli-Proxy-API-Management-Center"
+                value={values.rmPanelRepo}
+                onChange={(e) => onChange({ rmPanelRepo: e.target.value })}
+                disabled={disabled}
+              />
+            </SectionGrid>
+          </div>
       </ConfigSection>
 
       <ConfigSection title={t('config_management.visual.sections.auth.title')} description={t('config_management.visual.sections.auth.description')}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <Input
-            label={t('config_management.visual.sections.auth.auth_dir')}
-            placeholder="~/.cli-proxy-api"
-            value={values.authDir}
-            onChange={(e) => onChange({ authDir: e.target.value })}
-            disabled={disabled}
-            hint={t('config_management.visual.sections.auth.auth_dir_hint')}
-          />
-          <ApiKeysCardEditor
-            value={values.apiKeysText}
-            disabled={disabled}
-            onChange={(apiKeysText) => onChange({ apiKeysText })}
-          />
-        </div>
+          <div className={styles.sectionStack}>
+            <Input
+              label={
+                <LabelWithHint
+                  label={t('config_management.visual.sections.auth.auth_dir')}
+                  hint={t('config_management.visual.sections.auth.auth_dir_hint')}
+                />
+              }
+              placeholder="~/.cli-proxy-api"
+              value={values.authDir}
+              onChange={(e) => onChange({ authDir: e.target.value })}
+              disabled={disabled}
+            />
+            <ApiKeysCardEditor
+              value={values.apiKeysText}
+              disabled={disabled}
+              onChange={(apiKeysText) => onChange({ apiKeysText })}
+            />
+          </div>
       </ConfigSection>
 
       <ConfigSection title={t('config_management.visual.sections.system.title')} description={t('config_management.visual.sections.system.description')}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <SectionGrid>
-            <ToggleRow
-              title={t('config_management.visual.sections.system.debug')}
-              description={t('config_management.visual.sections.system.debug_desc')}
-              checked={values.debug}
-              disabled={disabled}
-              onChange={(debug) => onChange({ debug })}
-            />
-            <ToggleRow
-              title={t('config_management.visual.sections.system.commercial_mode')}
-              description={t('config_management.visual.sections.system.commercial_mode_desc')}
-              checked={values.commercialMode}
-              disabled={disabled}
-              onChange={(commercialMode) => onChange({ commercialMode })}
-            />
-            <ToggleRow
-              title={t('config_management.visual.sections.system.logging_to_file')}
-              description={t('config_management.visual.sections.system.logging_to_file_desc')}
-              checked={values.loggingToFile}
-              disabled={disabled}
-              onChange={(loggingToFile) => onChange({ loggingToFile })}
-            />
-            <ToggleRow
-              title={t('config_management.visual.sections.system.usage_statistics')}
-              description={t('config_management.visual.sections.system.usage_statistics_desc')}
-              checked={values.usageStatisticsEnabled}
-              disabled={disabled}
-              onChange={(usageStatisticsEnabled) => onChange({ usageStatisticsEnabled })}
-            />
-          </SectionGrid>
+          <div className={styles.sectionStack}>
+            <div className={styles.toggleGrid}>
+              <ToggleRow
+                title={t('config_management.visual.sections.system.debug')}
+                description={t('config_management.visual.sections.system.debug_desc')}
+                checked={values.debug}
+                disabled={disabled}
+                onChange={(debug) => onChange({ debug })}
+              />
+              <ToggleRow
+                title={t('config_management.visual.sections.system.commercial_mode')}
+                description={t('config_management.visual.sections.system.commercial_mode_desc')}
+                checked={values.commercialMode}
+                disabled={disabled}
+                onChange={(commercialMode) => onChange({ commercialMode })}
+              />
+              <ToggleRow
+                title={t('config_management.visual.sections.system.logging_to_file')}
+                description={t('config_management.visual.sections.system.logging_to_file_desc')}
+                checked={values.loggingToFile}
+                disabled={disabled}
+                onChange={(loggingToFile) => onChange({ loggingToFile })}
+              />
+              <ToggleRow
+                title={t('config_management.visual.sections.system.usage_statistics')}
+                description={t('config_management.visual.sections.system.usage_statistics_desc')}
+                checked={values.usageStatisticsEnabled}
+                disabled={disabled}
+                onChange={(usageStatisticsEnabled) => onChange({ usageStatisticsEnabled })}
+              />
+            </div>
 
-          <SectionGrid>
-            <Input
-              label={t('config_management.visual.sections.system.logs_max_size')}
-              type="number"
-              placeholder="0"
-              value={values.logsMaxTotalSizeMb}
-              onChange={(e) => onChange({ logsMaxTotalSizeMb: e.target.value })}
-              disabled={disabled}
-            />
-          </SectionGrid>
-        </div>
+            <div className={styles.inputsGrid}>
+              <Input
+                label={t('config_management.visual.sections.system.logs_max_size')}
+                type="number"
+                placeholder="0"
+                value={values.logsMaxTotalSizeMb}
+                onChange={(e) => onChange({ logsMaxTotalSizeMb: e.target.value })}
+                disabled={disabled}
+              />
+            </div>
+          </div>
       </ConfigSection>
 
       <ConfigSection title={t('config_management.visual.sections.network.title')} description={t('config_management.visual.sections.network.description')}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <SectionGrid>
-            <Input
-              label={t('config_management.visual.sections.network.proxy_url')}
-              placeholder="socks5://user:pass@127.0.0.1:1080/"
-              value={values.proxyUrl}
-              onChange={(e) => onChange({ proxyUrl: e.target.value })}
-              disabled={disabled}
-            />
-            <Input
-              label={t('config_management.visual.sections.network.request_retry')}
-              type="number"
-              placeholder="3"
-              value={values.requestRetry}
-              onChange={(e) => onChange({ requestRetry: e.target.value })}
-              disabled={disabled}
-            />
-            <Input
-              label={t('config_management.visual.sections.network.max_retry_interval')}
-              type="number"
-              placeholder="30"
-              value={values.maxRetryInterval}
-              onChange={(e) => onChange({ maxRetryInterval: e.target.value })}
-              disabled={disabled}
-            />
-            <div className="form-group">
-              <label>{t('config_management.visual.sections.network.routing_strategy')}</label>
-              <Select
-                value={values.routingStrategy}
-                options={[
-                  { value: 'round-robin', label: t('config_management.visual.sections.network.strategy_round_robin') },
-                  { value: 'fill-first', label: t('config_management.visual.sections.network.strategy_fill_first') },
-                ]}
+          <div className={styles.sectionStack}>
+            <div className={styles.toggleGrid}>
+              <ToggleRow
+                title={t('config_management.visual.sections.network.force_model_prefix')}
+                description={t('config_management.visual.sections.network.force_model_prefix_desc')}
+                checked={values.forceModelPrefix}
                 disabled={disabled}
-                ariaLabel={t('config_management.visual.sections.network.routing_strategy')}
-                onChange={(nextValue) =>
-                  onChange({ routingStrategy: nextValue as VisualConfigValues['routingStrategy'] })
-                }
+                onChange={(forceModelPrefix) => onChange({ forceModelPrefix })}
               />
-              <div className="hint">{t('config_management.visual.sections.network.routing_strategy_hint')}</div>
+              <ToggleRow
+                title={t('config_management.visual.sections.network.ws_auth')}
+                description={t('config_management.visual.sections.network.ws_auth_desc')}
+                checked={values.wsAuth}
+                disabled={disabled}
+                onChange={(wsAuth) => onChange({ wsAuth })}
+              />
             </div>
-          </SectionGrid>
 
-          <ToggleRow
-            title={t('config_management.visual.sections.network.force_model_prefix')}
-            description={t('config_management.visual.sections.network.force_model_prefix_desc')}
-            checked={values.forceModelPrefix}
-            disabled={disabled}
-            onChange={(forceModelPrefix) => onChange({ forceModelPrefix })}
-          />
-          <ToggleRow
-            title={t('config_management.visual.sections.network.ws_auth')}
-            description={t('config_management.visual.sections.network.ws_auth_desc')}
-            checked={values.wsAuth}
-            disabled={disabled}
-            onChange={(wsAuth) => onChange({ wsAuth })}
-          />
-        </div>
+            <div className={styles.inputsGrid}>
+              <Input
+                label={t('config_management.visual.sections.network.proxy_url')}
+                placeholder="socks5://user:pass@127.0.0.1:1080/"
+                value={values.proxyUrl}
+                onChange={(e) => onChange({ proxyUrl: e.target.value })}
+                disabled={disabled}
+              />
+              <Input
+                label={t('config_management.visual.sections.network.request_retry')}
+                type="number"
+                placeholder="3"
+                value={values.requestRetry}
+                onChange={(e) => onChange({ requestRetry: e.target.value })}
+                disabled={disabled}
+              />
+              <Input
+                label={t('config_management.visual.sections.network.max_retry_interval')}
+                type="number"
+                placeholder="30"
+                value={values.maxRetryInterval}
+                onChange={(e) => onChange({ maxRetryInterval: e.target.value })}
+                disabled={disabled}
+              />
+              <div className="form-group">
+                <label>
+                  <LabelWithHint
+                    label={t('config_management.visual.sections.network.routing_strategy')}
+                    hint={t('config_management.visual.sections.network.routing_strategy_hint')}
+                  />
+                </label>
+                <Select
+                  value={values.routingStrategy}
+                  options={[
+                    { value: 'round-robin', label: t('config_management.visual.sections.network.strategy_round_robin') },
+                    { value: 'fill-first', label: t('config_management.visual.sections.network.strategy_fill_first') },
+                  ]}
+                  disabled={disabled}
+                  ariaLabel={t('config_management.visual.sections.network.routing_strategy')}
+                  onChange={(nextValue) =>
+                    onChange({ routingStrategy: nextValue as VisualConfigValues['routingStrategy'] })
+                  }
+                />
+              </div>
+            </div>
+          </div>
       </ConfigSection>
 
       <ConfigSection title={t('config_management.visual.sections.quota.title')} description={t('config_management.visual.sections.quota.description')}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <ToggleRow
-            title={t('config_management.visual.sections.quota.switch_project')}
-            description={t('config_management.visual.sections.quota.switch_project_desc')}
-            checked={values.quotaSwitchProject}
-            disabled={disabled}
-            onChange={(quotaSwitchProject) => onChange({ quotaSwitchProject })}
-          />
-          <ToggleRow
-            title={t('config_management.visual.sections.quota.switch_preview_model')}
-            description={t('config_management.visual.sections.quota.switch_preview_model_desc')}
-            checked={values.quotaSwitchPreviewModel}
-            disabled={disabled}
-            onChange={(quotaSwitchPreviewModel) => onChange({ quotaSwitchPreviewModel })}
-          />
-        </div>
+          <div className={styles.sectionStack}>
+            <div className={styles.toggleGrid}>
+              <ToggleRow
+                title={t('config_management.visual.sections.quota.switch_project')}
+                description={t('config_management.visual.sections.quota.switch_project_desc')}
+                checked={values.quotaSwitchProject}
+                disabled={disabled}
+                onChange={(quotaSwitchProject) => onChange({ quotaSwitchProject })}
+              />
+              <ToggleRow
+                title={t('config_management.visual.sections.quota.switch_preview_model')}
+                description={t('config_management.visual.sections.quota.switch_preview_model_desc')}
+                checked={values.quotaSwitchPreviewModel}
+                disabled={disabled}
+                onChange={(quotaSwitchPreviewModel) => onChange({ quotaSwitchPreviewModel })}
+              />
+            </div>
+          </div>
       </ConfigSection>
 
       <ConfigSection title={t('config_management.visual.sections.streaming.title')} description={t('config_management.visual.sections.streaming.description')}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <SectionGrid>
-            <div className="form-group">
-              <label>{t('config_management.visual.sections.streaming.keepalive_seconds')}</label>
-              <div style={{ position: 'relative' }}>
-                <input
-                  className="input"
-                  type="number"
-                  placeholder="0"
-                  value={values.streaming.keepaliveSeconds}
-                  onChange={(e) =>
-                    onChange({ streaming: { ...values.streaming, keepaliveSeconds: e.target.value } })
-                  }
-                  disabled={disabled}
-                />
-                {isKeepaliveDisabled && (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      right: 10,
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      fontSize: 12,
-                      color: 'var(--text-secondary)',
-                      background: 'var(--bg-secondary)',
-                      padding: '2px 8px',
-                      borderRadius: 999,
-                      border: '1px solid var(--border-color)',
-                    }}
-                  >
-                    {t('config_management.visual.sections.streaming.disabled')}
-                  </span>
-                )}
+          <div className={styles.sectionStack}>
+            <SectionGrid>
+              <div className="form-group">
+                <label>
+                  <LabelWithHint
+                    label={t('config_management.visual.sections.streaming.keepalive_seconds')}
+                    hint={t('config_management.visual.sections.streaming.keepalive_hint')}
+                  />
+                </label>
+                <div className={styles.relativeField}>
+                  <input
+                    className="input"
+                    type="number"
+                    placeholder="0"
+                    value={values.streaming.keepaliveSeconds}
+                    onChange={(e) =>
+                      onChange({ streaming: { ...values.streaming, keepaliveSeconds: e.target.value } })
+                    }
+                    disabled={disabled}
+                  />
+                  {isKeepaliveDisabled && (
+                    <span className={styles.inputStatusBadge}>
+                      {t('config_management.visual.sections.streaming.disabled')}
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="hint">{t('config_management.visual.sections.streaming.keepalive_hint')}</div>
-            </div>
-            <Input
-              label={t('config_management.visual.sections.streaming.bootstrap_retries')}
-              type="number"
-              placeholder="1"
-              value={values.streaming.bootstrapRetries}
-              onChange={(e) => onChange({ streaming: { ...values.streaming, bootstrapRetries: e.target.value } })}
-              disabled={disabled}
-              hint={t('config_management.visual.sections.streaming.bootstrap_hint')}
-            />
-          </SectionGrid>
+              <Input
+                label={
+                  <LabelWithHint
+                    label={t('config_management.visual.sections.streaming.bootstrap_retries')}
+                    hint={t('config_management.visual.sections.streaming.bootstrap_hint')}
+                  />
+                }
+                type="number"
+                placeholder="1"
+                value={values.streaming.bootstrapRetries}
+                onChange={(e) => onChange({ streaming: { ...values.streaming, bootstrapRetries: e.target.value } })}
+                disabled={disabled}
+              />
+            </SectionGrid>
 
-          <SectionGrid>
-            <div className="form-group">
-              <label>{t('config_management.visual.sections.streaming.nonstream_keepalive')}</label>
-              <div style={{ position: 'relative' }}>
-                <input
-                  className="input"
-                  type="number"
-                  placeholder="0"
-                  value={values.streaming.nonstreamKeepaliveInterval}
-                  onChange={(e) =>
-                    onChange({
-                      streaming: { ...values.streaming, nonstreamKeepaliveInterval: e.target.value },
-                    })
-                  }
-                  disabled={disabled}
-                />
-                {isNonstreamKeepaliveDisabled && (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      right: 10,
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      fontSize: 12,
-                      color: 'var(--text-secondary)',
-                      background: 'var(--bg-secondary)',
-                      padding: '2px 8px',
-                      borderRadius: 999,
-                      border: '1px solid var(--border-color)',
-                    }}
-                  >
-                    {t('config_management.visual.sections.streaming.disabled')}
-                  </span>
-                )}
+            <SectionGrid>
+              <div className="form-group">
+                <label>
+                  <LabelWithHint
+                    label={t('config_management.visual.sections.streaming.nonstream_keepalive')}
+                    hint={t('config_management.visual.sections.streaming.nonstream_keepalive_hint')}
+                  />
+                </label>
+                <div className={styles.relativeField}>
+                  <input
+                    className="input"
+                    type="number"
+                    placeholder="0"
+                    value={values.streaming.nonstreamKeepaliveInterval}
+                    onChange={(e) =>
+                      onChange({
+                        streaming: { ...values.streaming, nonstreamKeepaliveInterval: e.target.value },
+                      })
+                    }
+                    disabled={disabled}
+                  />
+                  {isNonstreamKeepaliveDisabled && (
+                    <span className={styles.inputStatusBadge}>
+                      {t('config_management.visual.sections.streaming.disabled')}
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="hint">
-                {t('config_management.visual.sections.streaming.nonstream_keepalive_hint')}
-              </div>
-            </div>
-          </SectionGrid>
-        </div>
+            </SectionGrid>
+          </div>
       </ConfigSection>
 
       <ConfigSection title={t('config_management.visual.sections.payload.title')} description={t('config_management.visual.sections.payload.description')}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div>
-            <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>{t('config_management.visual.sections.payload.default_rules')}</div>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
-              {t('config_management.visual.sections.payload.default_rules_desc')}
-            </div>
+        <div className={styles.sectionStack}>
+          <PayloadSectionBlock
+            title={t('config_management.visual.sections.payload.default_rules')}
+            description={t('config_management.visual.sections.payload.default_rules_desc')}
+            summary={payloadDefaultSummary}
+            expanded={expandedPayloadSections.defaultRules}
+            onToggle={() => togglePayloadSection('defaultRules')}
+          >
             <PayloadRulesEditor
               value={values.payloadDefaultRules}
               disabled={disabled}
               onChange={(payloadDefaultRules) => onChange({ payloadDefaultRules })}
             />
-          </div>
+          </PayloadSectionBlock>
 
-          <div>
-            <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>{t('config_management.visual.sections.payload.override_rules')}</div>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
-              {t('config_management.visual.sections.payload.override_rules_desc')}
-            </div>
+          <PayloadSectionBlock
+            title={t('config_management.visual.sections.payload.override_rules')}
+            description={t('config_management.visual.sections.payload.override_rules_desc')}
+            summary={payloadOverrideSummary}
+            expanded={expandedPayloadSections.overrideRules}
+            onToggle={() => togglePayloadSection('overrideRules')}
+          >
             <PayloadRulesEditor
               value={values.payloadOverrideRules}
               disabled={disabled}
               protocolFirst
               onChange={(payloadOverrideRules) => onChange({ payloadOverrideRules })}
             />
-          </div>
+          </PayloadSectionBlock>
 
-          <div>
-            <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>{t('config_management.visual.sections.payload.filter_rules')}</div>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
-              {t('config_management.visual.sections.payload.filter_rules_desc')}
-            </div>
+          <PayloadSectionBlock
+            title={t('config_management.visual.sections.payload.filter_rules')}
+            description={t('config_management.visual.sections.payload.filter_rules_desc')}
+            summary={payloadFilterSummary}
+            expanded={expandedPayloadSections.filterRules}
+            onToggle={() => togglePayloadSection('filterRules')}
+          >
             <PayloadFilterRulesEditor
               value={values.payloadFilterRules}
               disabled={disabled}
               onChange={(payloadFilterRules) => onChange({ payloadFilterRules })}
             />
-          </div>
+          </PayloadSectionBlock>
         </div>
       </ConfigSection>
     </div>

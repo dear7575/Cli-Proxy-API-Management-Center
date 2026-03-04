@@ -12,6 +12,7 @@ import {
   type ModelPrice
 } from '@/utils/usage';
 import { sparklineOptions } from '@/utils/usage/chartConfig';
+import { USAGE_STAT_CARD_ACCENTS } from '@/utils/usage/palette';
 import type { UsagePayload } from './hooks/useUsageData';
 import type { SparklineBundle } from './hooks/useSparklines';
 import styles from '@/pages/UsagePage.module.scss';
@@ -109,18 +110,18 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
       key: 'requests',
       label: t('usage_stats.total_requests'),
       icon: <IconSatellite size={16} />,
-      accent: '#8b8680',
-      accentSoft: 'rgba(139, 134, 128, 0.18)',
-      accentBorder: 'rgba(139, 134, 128, 0.35)',
+      accent: USAGE_STAT_CARD_ACCENTS.requests.accent,
+      accentSoft: USAGE_STAT_CARD_ACCENTS.requests.accentSoft,
+      accentBorder: USAGE_STAT_CARD_ACCENTS.requests.accentBorder,
       value: loading ? '-' : (usage?.total_requests ?? 0).toLocaleString(),
       meta: (
         <>
           <span className={styles.statMetaItem}>
-            <span className={styles.statMetaDot} style={{ backgroundColor: '#10b981' }} />
+            <span className={`${styles.statMetaDot} ${styles.statMetaDotSuccess}`} />
             {t('usage_stats.success_requests')}: {loading ? '-' : (usage?.success_count ?? 0)}
           </span>
           <span className={styles.statMetaItem}>
-            <span className={styles.statMetaDot} style={{ backgroundColor: '#c65746' }} />
+            <span className={`${styles.statMetaDot} ${styles.statMetaDotFailure}`} />
             {t('usage_stats.failed_requests')}: {loading ? '-' : (usage?.failure_count ?? 0)}
           </span>
         </>
@@ -131,9 +132,9 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
       key: 'tokens',
       label: t('usage_stats.total_tokens'),
       icon: <IconDiamond size={16} />,
-      accent: '#8b5cf6',
-      accentSoft: 'rgba(139, 92, 246, 0.18)',
-      accentBorder: 'rgba(139, 92, 246, 0.35)',
+      accent: USAGE_STAT_CARD_ACCENTS.tokens.accent,
+      accentSoft: USAGE_STAT_CARD_ACCENTS.tokens.accentSoft,
+      accentBorder: USAGE_STAT_CARD_ACCENTS.tokens.accentBorder,
       value: loading ? '-' : formatCompactNumber(usage?.total_tokens ?? 0),
       meta: (
         <>
@@ -151,9 +152,9 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
       key: 'rpm',
       label: t('usage_stats.rpm_30m'),
       icon: <IconTimer size={16} />,
-      accent: '#22c55e',
-      accentSoft: 'rgba(34, 197, 94, 0.18)',
-      accentBorder: 'rgba(34, 197, 94, 0.32)',
+      accent: USAGE_STAT_CARD_ACCENTS.rpm.accent,
+      accentSoft: USAGE_STAT_CARD_ACCENTS.rpm.accentSoft,
+      accentBorder: USAGE_STAT_CARD_ACCENTS.rpm.accentBorder,
       value: loading ? '-' : formatPerMinuteValue(rateStats.rpm),
       meta: (
         <span className={styles.statMetaItem}>
@@ -166,9 +167,9 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
       key: 'tpm',
       label: t('usage_stats.tpm_30m'),
       icon: <IconTrendingUp size={16} />,
-      accent: '#f97316',
-      accentSoft: 'rgba(249, 115, 22, 0.18)',
-      accentBorder: 'rgba(249, 115, 22, 0.32)',
+      accent: USAGE_STAT_CARD_ACCENTS.tpm.accent,
+      accentSoft: USAGE_STAT_CARD_ACCENTS.tpm.accentSoft,
+      accentBorder: USAGE_STAT_CARD_ACCENTS.tpm.accentBorder,
       value: loading ? '-' : formatPerMinuteValue(rateStats.tpm),
       meta: (
         <span className={styles.statMetaItem}>
@@ -181,9 +182,9 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
       key: 'cost',
       label: t('usage_stats.total_cost'),
       icon: <IconDollarSign size={16} />,
-      accent: '#f59e0b',
-      accentSoft: 'rgba(245, 158, 11, 0.18)',
-      accentBorder: 'rgba(245, 158, 11, 0.32)',
+      accent: USAGE_STAT_CARD_ACCENTS.cost.accent,
+      accentSoft: USAGE_STAT_CARD_ACCENTS.cost.accentSoft,
+      accentBorder: USAGE_STAT_CARD_ACCENTS.cost.accentBorder,
       value: loading ? '-' : hasPrices ? formatUsd(totalCost) : '--',
       meta: (
         <>

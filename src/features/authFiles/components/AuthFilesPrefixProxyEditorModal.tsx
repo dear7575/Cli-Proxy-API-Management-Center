@@ -9,7 +9,7 @@ import type {
   PrefixProxyEditorFieldValue,
   PrefixProxyEditorState,
 } from '@/features/authFiles/hooks/useAuthFilesPrefixProxyEditor';
-import styles from '@/pages/AuthFilesPage.module.scss';
+import styles from './AuthFilesPrefixProxyEditorModal.module.scss';
 
 export type AuthFilesPrefixProxyEditorModalProps = {
   disableControls: boolean;
@@ -24,6 +24,9 @@ export type AuthFilesPrefixProxyEditorModalProps = {
 export function AuthFilesPrefixProxyEditorModal(props: AuthFilesPrefixProxyEditorModalProps) {
   const { t } = useTranslation();
   const { disableControls, editor, updatedText, dirty, onClose, onSave, onChange } = props;
+  const titleText = editor?.fileName
+    ? t('auth_files.auth_field_editor_title', { name: editor.fileName })
+    : t('auth_files.prefix_proxy_button');
 
   return (
     <Modal
@@ -31,48 +34,51 @@ export function AuthFilesPrefixProxyEditorModal(props: AuthFilesPrefixProxyEdito
       onClose={onClose}
       closeDisabled={editor?.saving === true}
       width={720}
-      title={
-        editor?.fileName
-          ? t('auth_files.auth_field_editor_title', { name: editor.fileName })
-          : t('auth_files.prefix_proxy_button')
-      }
+      className={styles.editorModal}
+      title={<span className={styles.titleText}>{titleText}</span>}
       footer={
-        <>
-          <Button variant="secondary" onClick={onClose} disabled={editor?.saving === true}>
+        <div className={styles.footerActions}>
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={editor?.saving === true}
+            className={styles.footerBtn}
+          >
             {t('common.cancel')}
           </Button>
           <Button
+            className={styles.footerBtn}
             onClick={onSave}
             loading={editor?.saving === true}
             disabled={disableControls || editor?.saving === true || !dirty || !editor?.json}
           >
             {t('common.save')}
           </Button>
-        </>
+        </div>
       }
     >
       {editor && (
-        <div className={styles.prefixProxyEditor}>
+        <div className={styles.editorContent}>
           {editor.loading ? (
-            <div className={styles.prefixProxyLoading}>
+            <div className={styles.loadingState}>
               <LoadingSpinner size={14} />
               <span>{t('auth_files.prefix_proxy_loading')}</span>
             </div>
           ) : (
             <>
-              {editor.error && <div className={styles.prefixProxyError}>{editor.error}</div>}
-              <div className={styles.prefixProxyJsonWrapper}>
-                <label className={styles.prefixProxyLabel}>
+              {editor.error && <div className={styles.errorBox}>{editor.error}</div>}
+              <div className={styles.sourceSection}>
+                <label className={styles.sectionLabel}>
                   {t('auth_files.prefix_proxy_source_label')}
                 </label>
                 <textarea
-                  className={styles.prefixProxyTextarea}
+                  className={styles.sourceTextarea}
                   rows={10}
                   readOnly
                   value={updatedText}
                 />
               </div>
-              <div className={styles.prefixProxyFields}>
+              <div className={styles.fieldsSection}>
                 <Input
                   label={t('auth_files.prefix_label')}
                   value={editor.prefix}
@@ -94,17 +100,17 @@ export function AuthFilesPrefixProxyEditorModal(props: AuthFilesPrefixProxyEdito
                   disabled={disableControls || editor.saving || !editor.json}
                   onChange={(e) => onChange('priority', e.target.value)}
                 />
-                <div className="form-group">
+                <div className={styles.formGroup}>
                   <label>{t('auth_files.excluded_models_label')}</label>
                   <textarea
-                    className="input"
+                    className={styles.fieldTextarea}
                     value={editor.excludedModelsText}
                     placeholder={t('auth_files.excluded_models_placeholder')}
                     rows={4}
                     disabled={disableControls || editor.saving || !editor.json}
                     onChange={(e) => onChange('excludedModelsText', e.target.value)}
                   />
-                  <div className="hint">{t('auth_files.excluded_models_hint')}</div>
+                  <div className={styles.fieldHint}>{t('auth_files.excluded_models_hint')}</div>
                 </div>
                 <Input
                   label={t('auth_files.disable_cooling_label')}
@@ -115,15 +121,17 @@ export function AuthFilesPrefixProxyEditorModal(props: AuthFilesPrefixProxyEdito
                   onChange={(e) => onChange('disableCooling', e.target.value)}
                 />
                 {editor.isCodexFile && (
-                  <div className="form-group">
+                  <div className={styles.formGroup}>
                     <label>{t('ai_providers.codex_websockets_label')}</label>
-                    <ToggleSwitch
-                      checked={Boolean(editor.websocket)}
-                      disabled={disableControls || editor.saving || !editor.json}
-                      ariaLabel={t('ai_providers.codex_websockets_label')}
-                      onChange={(value) => onChange('websocket', value)}
-                    />
-                    <div className="hint">{t('ai_providers.codex_websockets_hint')}</div>
+                    <div className={styles.toggleRow}>
+                      <ToggleSwitch
+                        checked={Boolean(editor.websocket)}
+                        disabled={disableControls || editor.saving || !editor.json}
+                        ariaLabel={t('ai_providers.codex_websockets_label')}
+                        onChange={(value) => onChange('websocket', value)}
+                      />
+                    </div>
+                    <div className={styles.fieldHint}>{t('ai_providers.codex_websockets_hint')}</div>
                   </div>
                 )}
               </div>

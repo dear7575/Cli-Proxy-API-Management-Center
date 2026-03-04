@@ -178,10 +178,11 @@ export function Modal({
 
   const overlayClass = `modal-overlay ${isClosing ? 'modal-overlay-closing' : 'modal-overlay-entering'}`;
   const modalClass = `modal ${isClosing ? 'modal-closing' : 'modal-entering'}${className ? ` ${className}` : ''}`;
+  const modalStyle = { width };
 
   const modalContent = (
     <div className={overlayClass}>
-      <div className={modalClass} style={{ width }} role="dialog" aria-modal="true">
+      <div className={modalClass} style={modalStyle} role="dialog" aria-modal="true">
         <button
           type="button"
           className="modal-close-floating"

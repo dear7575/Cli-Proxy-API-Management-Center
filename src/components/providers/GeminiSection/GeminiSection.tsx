@@ -1,4 +1,4 @@
-import { Fragment, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -13,9 +13,16 @@ import {
   type UsageDetail,
 } from '@/utils/usage';
 import styles from '@/pages/AiProvidersPage.module.scss';
+import { CountTooltipCell } from '../CountTooltipCell';
 import { ProviderList } from '../ProviderList';
 import { ProviderStatusBar } from '../ProviderStatusBar';
-import { getStatsBySource, hasDisableAllModelsRule } from '../utils';
+import {
+  getExcludedModelDisplayNames,
+  getHeaderDisplayNames,
+  getModelDisplayNames,
+  getStatsBySource,
+  hasDisableAllModelsRule,
+} from '../utils';
 
 interface GeminiSectionProps {
   configs: GeminiKeyConfig[];
@@ -28,6 +35,8 @@ interface GeminiSectionProps {
   onEdit: (index: number) => void;
   onDelete: (index: number) => void;
   onToggle: (index: number, enabled: boolean) => void;
+  onBulkDelete: (indices: number[]) => void;
+  onBulkToggle: (indices: number[], enabled: boolean) => void;
 }
 
 export function GeminiSection({
@@ -41,6 +50,8 @@ export function GeminiSection({
   onEdit,
   onDelete,
   onToggle,
+  onBulkDelete,
+  onBulkToggle,
 }: GeminiSectionProps) {
   const { t } = useTranslation();
   const actionsDisabled = disableControls || loading || isSwitching;
@@ -82,116 +93,153 @@ export function GeminiSection({
         <ProviderList<GeminiKeyConfig>
           items={configs}
           loading={loading}
+          stateKey="gemini"
           keyField={(item) => item.apiKey}
+          getSearchText={(item) =>
+            [
+              item.apiKey,
+              item.prefix,
+              item.baseUrl,
+              item.proxyUrl,
+              ...Object.entries(item.headers || {}).flatMap(([key, value]) => [key, value]),
+              ...(item.models || []).flatMap((model) => [model.name, model.alias || '']),
+              ...(item.excludedModels || []),
+            ]
+              .filter(Boolean)
+              .join(' ')
+          }
+          sortOptions={[
+            {
+              value: 'priority_desc',
+              label: t('ai_providers.list_sort_priority_desc'),
+              direction: 'desc',
+              getValue: (entry) => entry.priority,
+            },
+          ]}
           emptyTitle={t('ai_providers.gemini_empty_title')}
           emptyDescription={t('ai_providers.gemini_empty_desc')}
+          bulkActions={[
+            {
+              value: 'enable',
+              label: t('ai_providers.list_bulk_enable'),
+              onAction: (indices) => onBulkToggle(indices, true),
+            },
+            {
+              value: 'disable',
+              label: t('ai_providers.list_bulk_disable'),
+              onAction: (indices) => onBulkToggle(indices, false),
+            },
+            {
+              value: 'delete',
+              label: t('ai_providers.list_bulk_delete'),
+              variant: 'danger',
+              onAction: onBulkDelete,
+            },
+          ]}
           onEdit={onEdit}
           onDelete={onDelete}
           actionsDisabled={actionsDisabled}
           getRowDisabled={(item) => hasDisableAllModelsRule(item.excludedModels)}
-          renderExtraActions={(item, index) => (
-            <ToggleSwitch
-              label={t('ai_providers.config_toggle_label')}
-              checked={!hasDisableAllModelsRule(item.excludedModels)}
-              disabled={toggleDisabled}
-              onChange={(value) => void onToggle(index, value)}
-            />
-          )}
-          renderContent={(item, index) => {
-            const stats = getStatsBySource(item.apiKey, keyStats, item.prefix);
-            const headerEntries = Object.entries(item.headers || {});
-            const configDisabled = hasDisableAllModelsRule(item.excludedModels);
-            const excludedModels = item.excludedModels ?? [];
-            const statusData = statusBarCache.get(item.apiKey) || calculateStatusBarData([]);
-
-            return (
-              <Fragment>
-                <div className="item-title">
-                  {t('ai_providers.gemini_item_title')} #{index + 1}
-                </div>
-                <div className={styles.fieldRow}>
-                  <span className={styles.fieldLabel}>{t('common.api_key')}:</span>
-                  <span className={styles.fieldValue}>{maskApiKey(item.apiKey)}</span>
-                </div>
-                {item.priority !== undefined && (
-                  <div className={styles.fieldRow}>
-                    <span className={styles.fieldLabel}>{t('common.priority')}:</span>
-                    <span className={styles.fieldValue}>{item.priority}</span>
-                  </div>
-                )}
-                {item.prefix && (
-                  <div className={styles.fieldRow}>
-                    <span className={styles.fieldLabel}>{t('common.prefix')}:</span>
-                    <span className={styles.fieldValue}>{item.prefix}</span>
-                  </div>
-                )}
-                {item.baseUrl && (
-                  <div className={styles.fieldRow}>
-                    <span className={styles.fieldLabel}>{t('common.base_url')}:</span>
-                    <span className={styles.fieldValue}>{item.baseUrl}</span>
-                  </div>
-                )}
-                {item.proxyUrl && (
-                  <div className={styles.fieldRow}>
-                    <span className={styles.fieldLabel}>{t('common.proxy_url')}:</span>
-                    <span className={styles.fieldValue}>{item.proxyUrl}</span>
-                  </div>
-                )}
-                {headerEntries.length > 0 && (
-                  <div className={styles.headerBadgeList}>
-                    {headerEntries.map(([key, value]) => (
-                      <span key={key} className={styles.headerBadge}>
-                        <strong>{key}:</strong> {value}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {configDisabled && (
-                  <div className="status-badge warning" style={{ marginTop: 8, marginBottom: 0 }}>
-                    {t('ai_providers.config_disabled_badge')}
-                  </div>
-                )}
-                {item.models?.length ? (
-                  <div className={styles.modelTagList}>
-                    <span className={styles.modelCountLabel}>
-                      {t('ai_providers.gemini_models_count')}: {item.models.length}
-                    </span>
-                    {item.models.map((model) => (
-                      <span key={model.name} className={styles.modelTag}>
-                        <span className={styles.modelName}>{model.name}</span>
-                        {model.alias && model.alias !== model.name && (
-                          <span className={styles.modelAlias}>{model.alias}</span>
-                        )}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-                {excludedModels.length ? (
-                  <div className={styles.excludedModelsSection}>
-                    <div className={styles.excludedModelsLabel}>
-                      {t('ai_providers.excluded_models_count', { count: excludedModels.length })}
-                    </div>
-                    <div className={styles.modelTagList}>
-                      {excludedModels.map((model) => (
-                        <span key={model} className={`${styles.modelTag} ${styles.excludedModelTag}`}>
-                          <span className={styles.modelName}>{model}</span>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-                <div className={styles.cardStats}>
-                  <span className={`${styles.statPill} ${styles.statSuccess}`}>
-                    {t('stats.success')}: {stats.success}
-                  </span>
-                  <span className={`${styles.statPill} ${styles.statFailure}`}>
-                    {t('stats.failure')}: {stats.failure}
-                  </span>
-                </div>
-                <ProviderStatusBar statusData={statusData} />
-              </Fragment>
-            );
-          }}
+          columns={[
+            {
+              key: 'apiKey',
+              title: t('common.api_key'),
+              className: 'provider-table-cell-nowrap provider-table-cell-ellipsis',
+              ellipsis: true,
+              render: (item) => maskApiKey(item.apiKey),
+            },
+            {
+              key: 'priority',
+              title: t('common.priority'),
+              className: 'provider-table-cell-numeric',
+              render: (item) => (item.priority ?? '--'),
+            },
+            {
+              key: 'prefix',
+              title: t('common.prefix'),
+              className: 'provider-table-cell-nowrap provider-table-cell-ellipsis',
+              ellipsis: true,
+              render: (item) => item.prefix || '--',
+            },
+            {
+              key: 'baseUrl',
+              title: t('common.base_url'),
+              className: 'provider-table-cell-base-url provider-table-cell-ellipsis',
+              headerClassName: 'provider-table-col-base-url',
+              ellipsis: true,
+              render: (item) => item.baseUrl || '--',
+            },
+            {
+              key: 'proxyUrl',
+              title: t('common.proxy_url'),
+              className: 'provider-table-cell-proxy-url provider-table-cell-ellipsis',
+              headerClassName: 'provider-table-col-proxy-url',
+              ellipsis: true,
+              render: (item) => item.proxyUrl || '--',
+            },
+            {
+              key: 'modelsCount',
+              title: t('common.model', { defaultValue: '模型' }),
+              className: 'provider-table-cell-numeric',
+              render: (item) => <CountTooltipCell items={getModelDisplayNames(item.models)} />,
+            },
+            {
+              key: 'excludedModels',
+              title: t('ai_providers.excluded_models_title', { defaultValue: '排除模型' }),
+              className: 'provider-table-cell-numeric',
+              render: (item) => (
+                <CountTooltipCell items={getExcludedModelDisplayNames(item.excludedModels)} tone="warning" />
+              ),
+            },
+            {
+              key: 'headers',
+              title: 'Headers',
+              className: 'provider-table-cell-numeric',
+              render: (item) => <CountTooltipCell items={getHeaderDisplayNames(item.headers)} />,
+            },
+            {
+              key: 'success',
+              title: t('stats.success'),
+              className: 'provider-table-cell-numeric provider-table-cell-success',
+              render: (item) => {
+                const stats = getStatsBySource(item.apiKey, keyStats, item.prefix);
+                return stats.success.toLocaleString();
+              },
+            },
+            {
+              key: 'failure',
+              title: t('stats.failure'),
+              className: 'provider-table-cell-numeric provider-table-cell-failure',
+              render: (item) => {
+                const stats = getStatsBySource(item.apiKey, keyStats, item.prefix);
+                return stats.failure.toLocaleString();
+              },
+            },
+            {
+              key: 'enabledSwitch',
+              title: t('common.status', { defaultValue: '状态' }),
+              className: 'provider-table-cell-switch',
+              render: (item, index) => {
+                return (
+                  <ToggleSwitch
+                    checked={!hasDisableAllModelsRule(item.excludedModels)}
+                    ariaLabel={t('ai_providers.config_toggle_label')}
+                    disabled={toggleDisabled}
+                    onChange={(value) => void onToggle(index, value)}
+                  />
+                );
+              },
+            },
+            {
+              key: 'statusBar',
+              title: t('ai_providers.status_bar_title', { defaultValue: '状态条' }),
+              className: 'provider-table-cell-status',
+              render: (item) => {
+                const statusData = statusBarCache.get(item.apiKey) || calculateStatusBarData([]);
+                return <ProviderStatusBar statusData={statusData} />;
+              },
+            },
+          ]}
         />
       </Card>
     </>

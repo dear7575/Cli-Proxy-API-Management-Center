@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { formatCompactNumber, formatUsd } from '@/utils/usage';
+import { UsageTablePagination } from './UsageTablePagination';
 import styles from '@/pages/UsagePage.module.scss';
 
 export interface ModelStat {
@@ -30,6 +31,8 @@ export function ModelStatsCard({ modelStats, loading, hasPrices }: ModelStatsCar
   const { t } = useTranslation();
   const [sortKey, setSortKey] = useState<SortKey>('requests');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -57,15 +60,44 @@ export function ModelStatsCard({ modelStats, loading, hasPrices }: ModelStatsCar
     sortKey === key ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
   const ariaSort = (key: SortKey): 'none' | 'ascending' | 'descending' =>
     sortKey === key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none';
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageItems = sorted.slice(pageStart, pageStart + pageSize);
+  const shouldEnableTableScroll = pageItems.length > 10;
+
+  useEffect(() => {
+    if (page <= totalPages) return;
+    setPage(totalPages);
+  }, [page, totalPages]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [sortKey, sortDir, modelStats.length]);
+
+  const handlePageSizeChange = (size: number) => {
+    if (!Number.isFinite(size) || size < 1) return;
+    setPageSize(Math.floor(size));
+    setPage(1);
+  };
 
   return (
-    <Card title={t('usage_stats.models')} className={styles.detailsFixedCard}>
+    <Card title={t('usage_stats.models')}>
       {loading ? (
         <div className={styles.hint}>{t('common.loading')}</div>
       ) : sorted.length > 0 ? (
-        <div className={styles.detailsScroll}>
-          <div className={styles.tableWrapper}>
-            <table className={styles.table}>
+        <>
+          <div
+            className={`${styles.tableWrapper} ${styles.modelStatsTableWrapper} ${shouldEnableTableScroll ? styles.modelStatsTableWrapperScrollable : ''}`.trim()}
+          >
+              <table className={`${styles.table} ${styles.modelStatsTable}`}>
+              <colgroup>
+                <col className={styles.modelStatsColModel} />
+                <col className={styles.modelStatsColRequests} />
+                <col className={styles.modelStatsColTokens} />
+                <col className={styles.modelStatsColRate} />
+                {hasPrices ? <col className={styles.modelStatsColCost} /> : null}
+              </colgroup>
               <thead>
                 <tr>
                   <th className={styles.sortableHeader} aria-sort={ariaSort('model')}>
@@ -118,10 +150,12 @@ export function ModelStatsCard({ modelStats, loading, hasPrices }: ModelStatsCar
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((stat) => (
+                {pageItems.map((stat) => (
                   <tr key={stat.model}>
-                    <td className={styles.modelCell}>{stat.model}</td>
-                    <td>
+                    <td className={`${styles.modelCell} ${styles.tableCellLeft}`} title={stat.model}>
+                      <span className={styles.truncateText}>{stat.model}</span>
+                    </td>
+                    <td className={styles.tableCellMono}>
                       <span className={styles.requestCountCell}>
                         <span>{stat.requests.toLocaleString()}</span>
                         <span className={styles.requestBreakdown}>
@@ -130,8 +164,8 @@ export function ModelStatsCard({ modelStats, loading, hasPrices }: ModelStatsCar
                         </span>
                       </span>
                     </td>
-                    <td>{formatCompactNumber(stat.tokens)}</td>
-                    <td>
+                    <td className={styles.tableCellMono}>{formatCompactNumber(stat.tokens)}</td>
+                    <td className={styles.tableCellMono}>
                       <span
                         className={
                           stat.successRate >= 95
@@ -144,13 +178,22 @@ export function ModelStatsCard({ modelStats, loading, hasPrices }: ModelStatsCar
                         {stat.successRate.toFixed(1)}%
                       </span>
                     </td>
-                    {hasPrices && <td>{stat.cost > 0 ? formatUsd(stat.cost) : '--'}</td>}
+                    {hasPrices && <td className={styles.tableCellMono}>{stat.cost > 0 ? formatUsd(stat.cost) : '--'}</td>}
                   </tr>
                 ))}
               </tbody>
-            </table>
+              </table>
+            </div>
+          <div className={styles.usageTablePagination}>
+            <UsageTablePagination
+              totalItems={sorted.length}
+              currentPage={currentPage}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={handlePageSizeChange}
+            />
           </div>
-        </div>
+        </>
       ) : (
         <div className={styles.hint}>{t('usage_stats.no_data')}</div>
       )}

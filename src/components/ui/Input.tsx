@@ -1,7 +1,7 @@
 import type { InputHTMLAttributes, ReactNode } from 'react';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
-  label?: string;
+  label?: ReactNode;
   hint?: string;
   error?: string;
   rightElement?: ReactNode;
@@ -11,10 +11,10 @@ export function Input({ label, hint, error, rightElement, className = '', ...res
   return (
     <div className="form-group">
       {label && <label>{label}</label>}
-      <div style={{ position: 'relative' }}>
+      <div className="input-wrap">
         <input className={`input ${className}`.trim()} {...rest} />
         {rightElement && (
-          <div style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)' }}>
+          <div className="input-right-element">
             {rightElement}
           </div>
         )}

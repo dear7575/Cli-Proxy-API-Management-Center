@@ -11,34 +11,52 @@
   display: flex;
   flex-direction: column;
   gap: $spacing-sm;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
+  border-radius: $radius-lg;
+  background:
+    linear-gradient(
+      140deg,
+      color-mix(in srgb, var(--primary-color) 9%, var(--bg-primary)) 0%,
+      color-mix(in srgb, var(--bg-primary) 96%, transparent) 54%
+    );
+  box-shadow: 0 12px 24px -24px rgba(2, 6, 23, 0.7);
 }
 
 .pageTitle {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--text-primary);
+  font-size: clamp(26px, 2.7vw, 32px);
+  font-weight: 800;
+  color: color-mix(in srgb, var(--text-primary) 88%, var(--primary-color) 12%);
+  letter-spacing: -0.02em;
   margin: 0;
 }
 
 .description {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text-secondary);
   margin: 0;
+  max-width: 74ch;
 }
 
-.headerActions {
+.sectionToolbar {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: $spacing-sm;
   flex-wrap: wrap;
+}
+
+.sectionToolbarLeft,
+.sectionToolbarRight {
+  display: inline-flex;
   align-items: center;
+  gap: $spacing-sm;
+  flex-wrap: wrap;
+  min-width: 0;
+}
 
-  :global(.btn-sm) {
-    line-height: 16px;
-  }
-
-  :global(svg) {
-    display: block;
-  }
+.sectionToolbarRight {
+  margin-left: auto;
 }
 
 .titleWrapper {
@@ -61,6 +79,86 @@
   color: var(--count-badge-text);
   background-color: var(--count-badge-bg);
   box-sizing: border-box;
+}
+
+.sectionViewModeSwitch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 86%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--bg-primary) 65%, transparent);
+}
+
+.sectionViewModeButton:global(.btn) {
+  min-width: 72px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  box-shadow: none;
+  transform: none;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sectionViewModeButton:global(.btn):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--bg-primary) 88%, var(--bg-secondary) 12%);
+  border-color: color-mix(in srgb, var(--border-color) 82%, transparent);
+  color: var(--text-primary);
+}
+
+.sectionViewModeButtonActive:global(.btn) {
+  background: color-mix(in srgb, var(--bg-primary) 96%, var(--primary-color) 4%);
+  border-color: color-mix(in srgb, var(--primary-color) 36%, var(--border-color));
+  color: color-mix(in srgb, var(--primary-color) 72%, var(--text-primary));
+  box-shadow: 0 1px 2px rgba(2, 6, 23, 0.08);
+}
+
+.sectionViewModeButtonActive:global(.btn):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--bg-primary) 94%, var(--primary-color) 6%);
+  border-color: color-mix(in srgb, var(--primary-color) 45%, var(--border-color));
+}
+
+.sectionStats {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 88%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 90%, transparent);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sectionRefreshButton:global(.btn) {
+  min-height: 32px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sectionRefreshButton:global(.btn) > span:last-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sectionRefreshButton:global(.btn) > span:last-child > span {
+  line-height: 1.2;
+}
+
+.sectionRefreshButton:global(.btn) > span:last-child svg {
+  display: block;
+  flex-shrink: 0;
 }
 
 .errorBox {
@@ -145,40 +243,44 @@
   }
 }
 
-.viewModeToggle {
-  display: flex;
-  gap: $spacing-xs;
-  align-items: center;
-}
-
 .claudeCard {
-  background-image: linear-gradient(180deg,
-      rgba(252, 228, 236, 0.18),
-      rgba(252, 228, 236, 0));
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary-color) 12%, transparent),
+    transparent
+  );
 }
 
 .antigravityCard {
-  background-image: linear-gradient(180deg,
-      rgba(224, 247, 250, 0.12),
-      rgba(224, 247, 250, 0));
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, #0ea5e9 12%, transparent),
+    transparent
+  );
 }
 
 .codexCard {
-  background-image: linear-gradient(180deg,
-      rgba(255, 243, 224, 0.18),
-      rgba(255, 243, 224, 0));
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, #f59e0b 14%, transparent),
+    transparent
+  );
 }
 
 .geminiCliCard {
-  background-image: linear-gradient(180deg,
-      rgba(231, 239, 255, 0.2),
-      rgba(231, 239, 255, 0));
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, #4f46e5 14%, transparent),
+    transparent
+  );
 }
 
 .kimiCard {
-  background-image: linear-gradient(180deg,
-      rgba(255, 244, 229, 0.2),
-      rgba(255, 244, 229, 0));
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, #fb7185 12%, transparent),
+    transparent
+  );
 }
 
 .quotaSection {
@@ -319,7 +421,9 @@
 }
 
 .fileCard {
-  background-color: var(--bg-primary);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--primary-color) 4%, transparent), transparent),
+    var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: $radius-lg;
   padding: $spacing-md;
@@ -340,6 +444,7 @@
   align-items: center;
   gap: $spacing-sm;
   min-height: 28px;
+  min-width: 0;
 }
 
 .typeBadge {
@@ -355,26 +460,431 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
-  word-break: break-all;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   line-height: 1.4;
 }
 
-.pagination {
+.cardMeta {
   display: flex;
-  justify-content: center;
   align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.quotaTableWrapper {
+  overflow: auto;
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  background: color-mix(in srgb, var(--bg-primary) 94%, transparent);
+  box-shadow: 0 14px 24px -24px rgba(2, 6, 23, 0.72);
+  max-height: calc(48px + 10 * 72px);
+}
+
+.quotaTable {
+  width: 100%;
+  min-width: 1160px;
+  border-collapse: collapse;
+  font-size: 13px;
+  table-layout: fixed;
+
+  th,
+  td {
+    padding: 10px 12px;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-tertiary);
+    background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+    white-space: nowrap;
+    text-align: center;
+  }
+}
+
+.quotaTableCodex {
+  min-width: 1520px;
+}
+
+.quotaColIndex {
+  width: 58px;
+}
+
+.quotaColName {
+  width: 260px;
+}
+
+.quotaColType {
+  width: 100px;
+}
+
+.quotaColSize {
+  width: 100px;
+}
+
+.quotaColModified {
+  width: 170px;
+}
+
+.quotaColPlan {
+  width: 120px;
+}
+
+.quotaColPrimary {
+  width: 280px;
+}
+
+.quotaColSecondary {
+  width: 280px;
+}
+
+.quotaColActions {
+  width: 116px;
+}
+
+.quotaTableRow {
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background: color-mix(in srgb, var(--bg-tertiary) 84%, transparent);
+  }
+
+  &:last-child > td {
+    border-bottom: none;
+  }
+}
+
+.quotaCellIndex,
+.quotaCellType,
+.quotaCellSize,
+.quotaCellModified,
+.quotaCellPlan,
+.quotaCellPrimary,
+.quotaCellSecondary,
+.quotaCellActions {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.quotaCellIndex {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.quotaCellNameText {
+  display: block;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quotaCellName {
+  min-width: 0;
+  text-align: left;
+}
+
+.quotaCellPlan,
+.quotaCellPrimary,
+.quotaCellSecondary {
+  min-width: 0;
+  white-space: normal;
+}
+
+.quotaCompactInfo {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.quotaCompactLabel {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-weight: 700;
+}
+
+.quotaCompactValue {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.quotaPlanBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  min-width: 62px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 34%, var(--border-color));
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--bg-primary));
+  color: color-mix(in srgb, var(--primary-color) 75%, var(--text-primary));
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.quotaCodexEmpty {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.quotaCodexWindowCell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  text-align: left;
+}
+
+.quotaCodexWindowMeta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.quotaCodexPercent {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.quotaCodexReset {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.quotaActionButton:global(.btn.btn-sm) {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  min-width: 30px;
+  padding: 0;
+  gap: 0;
+}
+
+.quotaActionGroup {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.quotaDetailModal {
+  background: color-mix(in srgb, var(--bg-primary) 96%, var(--bg-secondary) 4%);
+  border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
+  box-shadow: 0 24px 48px -34px rgba(2, 6, 23, 0.58);
+
+  :global(.modal-header) {
+    padding: 14px 18px;
+    background: color-mix(in srgb, var(--bg-primary) 92%, var(--bg-secondary) 8%);
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
+  }
+
+  :global(.modal-body) {
+    padding: 16px 18px 14px;
+    max-height: min(68vh, 760px);
+    overflow: auto;
+  }
+}
+
+.quotaDetailContent {
+  display: flex;
+  flex-direction: column;
   gap: $spacing-md;
+}
+
+.quotaDetailHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.quotaDetailFileName {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quotaDetailSummary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.quotaSummaryItem {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 90%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.quotaDetailTableWrapper {
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  overflow: auto;
+  max-height: min(56vh, 560px);
+}
+
+.quotaDetailTable {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+
+  th,
+  td {
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+  }
+
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+    color: var(--text-tertiary);
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  tbody td:nth-child(1),
+  tbody td:nth-child(4),
+  tbody td:nth-child(5) {
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  tbody td:nth-child(2),
+  tbody td:nth-child(3) {
+    text-align: left;
+    white-space: normal;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+}
+
+.quotaDetailColIndex {
+  width: 56px;
+}
+
+.quotaDetailColGroup {
+  width: 180px;
+}
+
+.quotaDetailColModel {
+  width: auto;
+}
+
+.quotaDetailColRemain {
+  width: 170px;
+}
+
+.quotaDetailColReset {
+  width: 132px;
+}
+
+.quotaModelPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.quotaModelPill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--text-primary) 88%, var(--primary-color) 12%);
+  background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 88%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quotaDetailRemainingCell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.quotaRemainBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.quotaRemainHealthy {
+  color: var(--success-color, #16a34a);
+  background: color-mix(in srgb, var(--success-color, #16a34a) 12%, transparent);
+  border-color: color-mix(in srgb, var(--success-color, #16a34a) 30%, transparent);
+}
+
+.quotaRemainWarning {
+  color: var(--warning-color, #d97706);
+  background: color-mix(in srgb, var(--warning-color, #d97706) 14%, transparent);
+  border-color: color-mix(in srgb, var(--warning-color, #d97706) 34%, transparent);
+}
+
+.quotaRemainDanger {
+  color: var(--danger-color, #dc2626);
+  background: color-mix(in srgb, var(--danger-color, #dc2626) 14%, transparent);
+  border-color: color-mix(in srgb, var(--danger-color, #dc2626) 34%, transparent);
+}
+
+.pagination {
   margin-top: $spacing-lg;
   padding-top: $spacing-md;
   border-top: 1px solid var(--border-color);
 }
 
-.pageInfo {
-  font-size: 13px;
-  color: var(--text-secondary);
-  padding: $spacing-xs $spacing-md;
-  background-color: var(--bg-secondary);
-  border-radius: $radius-md;
+.paginationSingleLine {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: $spacing-md;
 }
 
 .warningOverlay {
@@ -403,5 +913,16 @@
     color: var(--text-primary);
     font-size: 14px;
     line-height: 1.6;
+  }
+}
+
+@include mobile {
+  .sectionToolbarRight {
+    margin-left: 0;
+  }
+
+  .sectionRefreshButton:global(.btn) {
+    width: 100%;
+    justify-content: center;
   }
 }

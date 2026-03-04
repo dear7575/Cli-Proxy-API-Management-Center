@@ -234,63 +234,70 @@ export function UsagePage() {
       )}
 
       <div className={styles.header}>
-        <h1 className={styles.pageTitle}>{t('usage_stats.title')}</h1>
-        <div className={styles.headerActions}>
-          <div className={styles.timeRangeGroup}>
-            <span className={styles.timeRangeLabel}>{t('usage_stats.range_filter')}</span>
-            <Select
-              value={timeRange}
-              options={timeRangeOptions}
-              onChange={(value) => setTimeRange(value as UsageTimeRange)}
-              className={styles.timeRangeSelectControl}
-              ariaLabel={t('usage_stats.range_filter')}
-              fullWidth={false}
-            />
-          </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleExport}
-            loading={exporting}
-            disabled={loading || importing}
-          >
-            {t('usage_stats.export')}
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleImport}
-            loading={importing}
-            disabled={loading || exporting}
-          >
-            {t('usage_stats.import')}
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => void loadUsage().catch(() => {})}
-            disabled={loading || exporting || importing}
-          >
-            {loading ? t('common.loading') : t('usage_stats.refresh')}
-          </Button>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept=".json,application/json"
-            style={{ display: 'none' }}
-            onChange={handleImportChange}
-          />
+        <div className={styles.headerTitleRow}>
+          <h1 className={styles.pageTitle}>{t('usage_stats.title')}</h1>
           {lastRefreshedAt && (
             <span className={styles.lastRefreshed}>
               {t('usage_stats.last_updated')}: {lastRefreshedAt.toLocaleTimeString()}
             </span>
           )}
         </div>
+        <div className={styles.headerToolbar}>
+          <div className={styles.headerToolbarLeft}>
+            <div className={styles.timeRangeGroup}>
+              <span className={styles.timeRangeLabel}>{t('usage_stats.range_filter')}</span>
+              <Select
+                value={timeRange}
+                options={timeRangeOptions}
+                onChange={(value) => setTimeRange(value as UsageTimeRange)}
+                className={styles.timeRangeSelectControl}
+                ariaLabel={t('usage_stats.range_filter')}
+                fullWidth={false}
+              />
+            </div>
+          </div>
+          <div className={styles.headerToolbarRight}>
+            <div className={styles.headerActionGroup}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleExport}
+                loading={exporting}
+                disabled={loading || importing}
+              >
+                {t('usage_stats.export')}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleImport}
+                loading={importing}
+                disabled={loading || exporting}
+              >
+                {t('usage_stats.import')}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void loadUsage().catch(() => {})}
+                disabled={loading || exporting || importing}
+              >
+                {loading ? t('common.loading') : t('usage_stats.refresh')}
+              </Button>
+            </div>
+          </div>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json,application/json"
+            className={styles.hiddenInput}
+            onChange={handleImportChange}
+          />
+        </div>
       </div>
 
       {error && <div className={styles.errorBox}>{error}</div>}
 
-      {/* Stats Overview Cards */}
       <StatCards
         usage={filteredUsage}
         loading={loading}
@@ -305,18 +312,16 @@ export function UsagePage() {
         }}
       />
 
-      {/* Chart Line Selection */}
-      <ChartLineSelector
-        chartLines={chartLines}
-        modelNames={modelNames}
-        maxLines={MAX_CHART_LINES}
-        onChange={handleChartLinesChange}
-      />
+      <div className={styles.overviewGrid}>
+        <ChartLineSelector
+          chartLines={chartLines}
+          modelNames={modelNames}
+          maxLines={MAX_CHART_LINES}
+          onChange={handleChartLinesChange}
+        />
+        <ServiceHealthCard usage={usage} loading={loading} />
+      </div>
 
-      {/* Service Health */}
-      <ServiceHealthCard usage={usage} loading={loading} />
-
-      {/* Charts Grid */}
       <div className={styles.chartsGrid}>
         <UsageChart
           title={t('usage_stats.requests_trend')}
@@ -340,58 +345,57 @@ export function UsagePage() {
         />
       </div>
 
-      {/* Token Breakdown Chart */}
-      <TokenBreakdownChart
-        usage={filteredUsage}
-        loading={loading}
-        isDark={isDark}
-        isMobile={isMobile}
-        hourWindowHours={hourWindowHours}
-      />
+      <div className={styles.secondaryChartsGrid}>
+        <TokenBreakdownChart
+          usage={filteredUsage}
+          loading={loading}
+          isDark={isDark}
+          isMobile={isMobile}
+          hourWindowHours={hourWindowHours}
+        />
+        <CostTrendChart
+          usage={filteredUsage}
+          loading={loading}
+          isDark={isDark}
+          isMobile={isMobile}
+          modelPrices={modelPrices}
+          hourWindowHours={hourWindowHours}
+        />
+      </div>
 
-      {/* Cost Trend Chart */}
-      <CostTrendChart
-        usage={filteredUsage}
-        loading={loading}
-        isDark={isDark}
-        isMobile={isMobile}
-        modelPrices={modelPrices}
-        hourWindowHours={hourWindowHours}
-      />
-
-      {/* Details Grid */}
       <div className={styles.detailsGrid}>
         <ApiDetailsCard apiStats={apiStats} loading={loading} hasPrices={hasPrices} />
         <ModelStatsCard modelStats={modelStats} loading={loading} hasPrices={hasPrices} />
       </div>
 
-      <RequestEventsDetailsCard
-        usage={filteredUsage}
-        loading={loading}
-        geminiKeys={config?.geminiApiKeys || []}
-        claudeConfigs={config?.claudeApiKeys || []}
-        codexConfigs={config?.codexApiKeys || []}
-        vertexConfigs={config?.vertexApiKeys || []}
-        openaiProviders={config?.openaiCompatibility || []}
-      />
+      <div className={styles.eventsSection}>
+        <RequestEventsDetailsCard
+          usage={filteredUsage}
+          loading={loading}
+          geminiKeys={config?.geminiApiKeys || []}
+          claudeConfigs={config?.claudeApiKeys || []}
+          codexConfigs={config?.codexApiKeys || []}
+          vertexConfigs={config?.vertexApiKeys || []}
+          openaiProviders={config?.openaiCompatibility || []}
+        />
+      </div>
 
-      {/* Credential Stats */}
-      <CredentialStatsCard
-        usage={filteredUsage}
-        loading={loading}
-        geminiKeys={config?.geminiApiKeys || []}
-        claudeConfigs={config?.claudeApiKeys || []}
-        codexConfigs={config?.codexApiKeys || []}
-        vertexConfigs={config?.vertexApiKeys || []}
-        openaiProviders={config?.openaiCompatibility || []}
-      />
-
-      {/* Price Settings */}
-      <PriceSettingsCard
-        modelNames={modelNames}
-        modelPrices={modelPrices}
-        onPricesChange={setModelPrices}
-      />
+      <div className={styles.bottomGrid}>
+        <CredentialStatsCard
+          usage={filteredUsage}
+          loading={loading}
+          geminiKeys={config?.geminiApiKeys || []}
+          claudeConfigs={config?.claudeApiKeys || []}
+          codexConfigs={config?.codexApiKeys || []}
+          vertexConfigs={config?.vertexApiKeys || []}
+          openaiProviders={config?.openaiCompatibility || []}
+        />
+        <PriceSettingsCard
+          modelNames={modelNames}
+          modelPrices={modelPrices}
+          onPricesChange={setModelPrices}
+        />
+      </div>
     </div>
   );
 }

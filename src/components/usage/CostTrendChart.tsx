@@ -11,6 +11,7 @@ import {
   type ModelPrice
 } from '@/utils/usage';
 import { buildChartOptions, getHourChartMinWidth } from '@/utils/usage/chartConfig';
+import { USAGE_COST_COLORS } from '@/utils/usage/palette';
 import type { UsagePayload } from './hooks/useUsageData';
 import styles from '@/pages/UsagePage.module.scss';
 
@@ -23,16 +24,16 @@ export interface CostTrendChartProps {
   hourWindowHours?: number;
 }
 
-const COST_COLOR = '#f59e0b';
-const COST_BG = 'rgba(245, 158, 11, 0.15)';
+const COST_COLOR = USAGE_COST_COLORS.line;
+const COST_BG = USAGE_COST_COLORS.area;
 
 function buildGradient(ctx: ScriptableContext<'line'>) {
   const chart = ctx.chart;
   const area = chart.chartArea;
   if (!area) return COST_BG;
   const gradient = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
-  gradient.addColorStop(0, 'rgba(245, 158, 11, 0.28)');
-  gradient.addColorStop(0.6, 'rgba(245, 158, 11, 0.12)');
+  gradient.addColorStop(0, 'rgba(245, 158, 11, 0.3)');
+  gradient.addColorStop(0.6, 'rgba(245, 158, 11, 0.13)');
   gradient.addColorStop(1, 'rgba(245, 158, 11, 0.02)');
   return gradient;
 }

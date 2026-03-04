@@ -1,4 +1,4 @@
-import { Fragment, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -12,9 +12,10 @@ import {
   type UsageDetail,
 } from '@/utils/usage';
 import styles from '@/pages/AiProvidersPage.module.scss';
+import { CountTooltipCell } from '../CountTooltipCell';
 import { ProviderList } from '../ProviderList';
 import { ProviderStatusBar } from '../ProviderStatusBar';
-import { getStatsBySource } from '../utils';
+import { getHeaderDisplayNames, getModelDisplayNames, getStatsBySource } from '../utils';
 
 interface VertexSectionProps {
   configs: ProviderKeyConfig[];
@@ -26,6 +27,7 @@ interface VertexSectionProps {
   onAdd: () => void;
   onEdit: (index: number) => void;
   onDelete: (index: number) => void;
+  onBulkDelete: (indices: number[]) => void;
 }
 
 export function VertexSection({
@@ -38,6 +40,7 @@ export function VertexSection({
   onAdd,
   onEdit,
   onDelete,
+  onBulkDelete,
 }: VertexSectionProps) {
   const { t } = useTranslation();
   const actionsDisabled = disableControls || loading || isSwitching;
@@ -78,80 +81,118 @@ export function VertexSection({
         <ProviderList<ProviderKeyConfig>
           items={configs}
           loading={loading}
+          stateKey="vertex"
           keyField={(item) => item.apiKey}
+          getSearchText={(item) =>
+            [
+              item.apiKey,
+              item.prefix,
+              item.baseUrl,
+              item.proxyUrl,
+              ...Object.entries(item.headers || {}).flatMap(([key, value]) => [key, value]),
+              ...(item.models || []).flatMap((model) => [model.name, model.alias || '']),
+            ]
+              .filter(Boolean)
+              .join(' ')
+          }
+          sortOptions={[
+            {
+              value: 'priority_desc',
+              label: t('ai_providers.list_sort_priority_desc'),
+              direction: 'desc',
+              getValue: (entry) => entry.priority,
+            },
+          ]}
           emptyTitle={t('ai_providers.vertex_empty_title')}
           emptyDescription={t('ai_providers.vertex_empty_desc')}
+          bulkActions={[
+            {
+              value: 'delete',
+              label: t('ai_providers.list_bulk_delete'),
+              variant: 'danger',
+              onAction: onBulkDelete,
+            },
+          ]}
           onEdit={onEdit}
           onDelete={onDelete}
           actionsDisabled={actionsDisabled}
-          renderContent={(item, index) => {
-            const stats = getStatsBySource(item.apiKey, keyStats, item.prefix);
-            const headerEntries = Object.entries(item.headers || {});
-            const statusData = statusBarCache.get(item.apiKey) || calculateStatusBarData([]);
-
-            return (
-              <Fragment>
-                <div className="item-title">
-                  {t('ai_providers.vertex_item_title')} #{index + 1}
-                </div>
-                <div className={styles.fieldRow}>
-                  <span className={styles.fieldLabel}>{t('common.api_key')}:</span>
-                  <span className={styles.fieldValue}>{maskApiKey(item.apiKey)}</span>
-                </div>
-                {item.prefix && (
-                  <div className={styles.fieldRow}>
-                    <span className={styles.fieldLabel}>{t('common.prefix')}:</span>
-                    <span className={styles.fieldValue}>{item.prefix}</span>
-                  </div>
-                )}
-                {item.baseUrl && (
-                  <div className={styles.fieldRow}>
-                    <span className={styles.fieldLabel}>{t('common.base_url')}:</span>
-                    <span className={styles.fieldValue}>{item.baseUrl}</span>
-                  </div>
-                )}
-                {item.proxyUrl && (
-                  <div className={styles.fieldRow}>
-                    <span className={styles.fieldLabel}>{t('common.proxy_url')}:</span>
-                    <span className={styles.fieldValue}>{item.proxyUrl}</span>
-                  </div>
-                )}
-                {headerEntries.length > 0 && (
-                  <div className={styles.headerBadgeList}>
-                    {headerEntries.map(([key, value]) => (
-                      <span key={key} className={styles.headerBadge}>
-                        <strong>{key}:</strong> {value}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {item.models?.length ? (
-                  <div className={styles.modelTagList}>
-                    <span className={styles.modelCountLabel}>
-                      {t('ai_providers.vertex_models_count')}: {item.models.length}
-                    </span>
-                    {item.models.map((model) => (
-                      <span key={`${model.name}-${model.alias || 'default'}`} className={styles.modelTag}>
-                        <span className={styles.modelName}>{model.name}</span>
-                        {model.alias && (
-                          <span className={styles.modelAlias}>{model.alias}</span>
-                        )}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-                <div className={styles.cardStats}>
-                  <span className={`${styles.statPill} ${styles.statSuccess}`}>
-                    {t('stats.success')}: {stats.success}
-                  </span>
-                  <span className={`${styles.statPill} ${styles.statFailure}`}>
-                    {t('stats.failure')}: {stats.failure}
-                  </span>
-                </div>
-                <ProviderStatusBar statusData={statusData} />
-              </Fragment>
-            );
-          }}
+          columns={[
+            {
+              key: 'apiKey',
+              title: t('common.api_key'),
+              className: 'provider-table-cell-nowrap provider-table-cell-ellipsis',
+              ellipsis: true,
+              render: (item) => maskApiKey(item.apiKey),
+            },
+            {
+              key: 'priority',
+              title: t('common.priority'),
+              className: 'provider-table-cell-numeric',
+              render: (item) => (item.priority ?? '--'),
+            },
+            {
+              key: 'prefix',
+              title: t('common.prefix'),
+              className: 'provider-table-cell-nowrap provider-table-cell-ellipsis',
+              ellipsis: true,
+              render: (item) => item.prefix || '--',
+            },
+            {
+              key: 'baseUrl',
+              title: t('common.base_url'),
+              className: 'provider-table-cell-base-url provider-table-cell-ellipsis',
+              headerClassName: 'provider-table-col-base-url',
+              ellipsis: true,
+              render: (item) => item.baseUrl || '--',
+            },
+            {
+              key: 'proxyUrl',
+              title: t('common.proxy_url'),
+              className: 'provider-table-cell-proxy-url provider-table-cell-ellipsis',
+              headerClassName: 'provider-table-col-proxy-url',
+              ellipsis: true,
+              render: (item) => item.proxyUrl || '--',
+            },
+            {
+              key: 'modelsCount',
+              title: t('common.model', { defaultValue: '模型' }),
+              className: 'provider-table-cell-numeric',
+              render: (item) => <CountTooltipCell items={getModelDisplayNames(item.models)} />,
+            },
+            {
+              key: 'headers',
+              title: 'Headers',
+              className: 'provider-table-cell-numeric',
+              render: (item) => <CountTooltipCell items={getHeaderDisplayNames(item.headers)} />,
+            },
+            {
+              key: 'success',
+              title: t('stats.success'),
+              className: 'provider-table-cell-numeric provider-table-cell-success',
+              render: (item) => {
+                const stats = getStatsBySource(item.apiKey, keyStats, item.prefix);
+                return stats.success.toLocaleString();
+              },
+            },
+            {
+              key: 'failure',
+              title: t('stats.failure'),
+              className: 'provider-table-cell-numeric provider-table-cell-failure',
+              render: (item) => {
+                const stats = getStatsBySource(item.apiKey, keyStats, item.prefix);
+                return stats.failure.toLocaleString();
+              },
+            },
+            {
+              key: 'statusBar',
+              title: t('ai_providers.status_bar_title', { defaultValue: '状态条' }),
+              className: 'provider-table-cell-status',
+              render: (item) => {
+                const statusData = statusBarCache.get(item.apiKey) || calculateStatusBarData([]);
+                return <ProviderStatusBar statusData={statusData} />;
+              },
+            },
+          ]}
         />
       </Card>
     </>

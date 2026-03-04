@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { formatCompactNumber, formatUsd, type ApiStats } from '@/utils/usage';
+import { UsageTablePagination } from './UsageTablePagination';
 import styles from '@/pages/UsagePage.module.scss';
 
 export interface ApiDetailsCardProps {
@@ -18,6 +19,8 @@ export function ApiDetailsCard({ apiStats, loading, hasPrices }: ApiDetailsCardP
   const [expandedApis, setExpandedApis] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<ApiSortKey>('requests');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const toggleExpand = (endpoint: string) => {
     setExpandedApis((prev) => {
@@ -57,97 +60,184 @@ export function ApiDetailsCard({ apiStats, loading, hasPrices }: ApiDetailsCardP
 
   const arrow = (key: ApiSortKey) =>
     sortKey === key ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+  const ariaSort = (key: ApiSortKey): 'none' | 'ascending' | 'descending' =>
+    sortKey === key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none';
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageItems = sorted.slice(pageStart, pageStart + pageSize);
+  const shouldEnableTableScroll = pageItems.length > 10;
+
+  useEffect(() => {
+    if (page <= totalPages) return;
+    setPage(totalPages);
+  }, [page, totalPages]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [sortKey, sortDir, apiStats.length]);
+
+  const handlePageSizeChange = (size: number) => {
+    if (!Number.isFinite(size) || size < 1) return;
+    setPageSize(Math.floor(size));
+    setPage(1);
+  };
 
   return (
-    <Card title={t('usage_stats.api_details')} className={styles.detailsFixedCard}>
+    <Card title={t('usage_stats.api_details')}>
       {loading ? (
         <div className={styles.hint}>{t('common.loading')}</div>
       ) : sorted.length > 0 ? (
         <>
-          <div className={styles.apiSortBar}>
-            {([
-              ['endpoint', 'usage_stats.api_endpoint'],
-              ['requests', 'usage_stats.requests_count'],
-              ['tokens', 'usage_stats.tokens_count'],
-              ...(hasPrices ? [['cost', 'usage_stats.total_cost']] : []),
-            ] as [ApiSortKey, string][]).map(([key, labelKey]) => (
-              <button
-                key={key}
-                type="button"
-                aria-pressed={sortKey === key}
-                className={`${styles.apiSortBtn} ${sortKey === key ? styles.apiSortBtnActive : ''}`}
-                onClick={() => handleSort(key)}
+          <div
+            className={`${styles.tableWrapper} ${styles.apiDetailsTableWrapper} ${shouldEnableTableScroll ? styles.apiDetailsTableWrapperScrollable : ''}`.trim()}
+          >
+              <table
+                className={`${styles.table} ${styles.apiDetailsTable} ${
+                  hasPrices ? styles.apiDetailsTableWithCost : styles.apiDetailsTableNoCost
+                }`}
               >
-                {t(labelKey)}{arrow(key)}
-              </button>
-            ))}
-          </div>
-          <div className={styles.detailsScroll}>
-            <div className={styles.apiList}>
-              {sorted.map((api, index) => {
-                const isExpanded = expandedApis.has(api.endpoint);
-                const panelId = `api-models-${index}`;
+                <colgroup>
+                  <col className={styles.apiDetailsColEndpoint} />
+                  <col className={styles.apiDetailsColRequests} />
+                  <col className={styles.apiDetailsColTokens} />
+                  <col className={styles.apiDetailsColRate} />
+                  {hasPrices ? <col className={styles.apiDetailsColCost} /> : null}
+                  <col className={styles.apiDetailsColModels} />
+                  <col className={styles.apiDetailsColAction} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th className={styles.sortableHeader} aria-sort={ariaSort('endpoint')}>
+                      <button
+                        type="button"
+                        className={styles.sortHeaderButton}
+                        onClick={() => handleSort('endpoint')}
+                      >
+                        {t('usage_stats.api_endpoint')}{arrow('endpoint')}
+                      </button>
+                    </th>
+                    <th className={styles.sortableHeader} aria-sort={ariaSort('requests')}>
+                      <button
+                        type="button"
+                        className={styles.sortHeaderButton}
+                        onClick={() => handleSort('requests')}
+                      >
+                        {t('usage_stats.requests_count')}{arrow('requests')}
+                      </button>
+                    </th>
+                    <th className={styles.sortableHeader} aria-sort={ariaSort('tokens')}>
+                      <button
+                        type="button"
+                        className={styles.sortHeaderButton}
+                        onClick={() => handleSort('tokens')}
+                      >
+                        {t('usage_stats.tokens_count')}{arrow('tokens')}
+                      </button>
+                    </th>
+                    <th>{t('usage_stats.success_rate')}</th>
+                    {hasPrices && (
+                      <th className={styles.sortableHeader} aria-sort={ariaSort('cost')}>
+                        <button
+                          type="button"
+                          className={styles.sortHeaderButton}
+                          onClick={() => handleSort('cost')}
+                        >
+                          {t('usage_stats.total_cost')}{arrow('cost')}
+                        </button>
+                      </th>
+                    )}
+                    <th>{t('usage_stats.models')}</th>
+                    <th>{t('common.action')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageItems.map((api, index) => {
+                    const isExpanded = expandedApis.has(api.endpoint);
+                    const panelId = `api-models-${pageStart + index}`;
+                    const successRate = api.totalRequests > 0
+                      ? (api.successCount / api.totalRequests) * 100
+                      : 100;
 
-                return (
-                  <div key={api.endpoint} className={styles.apiItem}>
-                    <button
-                      type="button"
-                      className={styles.apiHeader}
-                      onClick={() => toggleExpand(api.endpoint)}
-                      aria-expanded={isExpanded}
-                      aria-controls={panelId}
-                    >
-                      <div className={styles.apiInfo}>
-                        <span className={styles.apiEndpoint}>{api.endpoint}</span>
-                        <div className={styles.apiStats}>
-                          <span className={styles.apiBadge}>
+                    return (
+                      <Fragment key={api.endpoint}>
+                        <tr>
+                          <td className={`${styles.tableCellLeft} ${styles.modelCell}`} title={api.endpoint}>
+                            <span className={styles.truncateText}>{api.endpoint}</span>
+                          </td>
+                          <td className={styles.tableCellMono}>
                             <span className={styles.requestCountCell}>
-                              <span>
-                                {t('usage_stats.requests_count')}: {api.totalRequests.toLocaleString()}
-                              </span>
+                              <span>{api.totalRequests.toLocaleString()}</span>
                               <span className={styles.requestBreakdown}>
                                 (<span className={styles.statSuccess}>{api.successCount.toLocaleString()}</span>{' '}
                                 <span className={styles.statFailure}>{api.failureCount.toLocaleString()}</span>)
                               </span>
                             </span>
-                          </span>
-                          <span className={styles.apiBadge}>
-                            {t('usage_stats.tokens_count')}: {formatCompactNumber(api.totalTokens)}
-                          </span>
-                          {hasPrices && api.totalCost > 0 && (
-                            <span className={styles.apiBadge}>
-                              {t('usage_stats.total_cost')}: {formatUsd(api.totalCost)}
+                          </td>
+                          <td className={styles.tableCellMono}>{formatCompactNumber(api.totalTokens)}</td>
+                          <td className={styles.tableCellMono}>
+                            <span
+                              className={
+                                successRate >= 95
+                                  ? styles.statSuccess
+                                  : successRate >= 80
+                                    ? styles.statNeutral
+                                    : styles.statFailure
+                              }
+                            >
+                              {successRate.toFixed(1)}%
                             </span>
+                          </td>
+                          {hasPrices && (
+                            <td className={styles.tableCellMono}>{api.totalCost > 0 ? formatUsd(api.totalCost) : '--'}</td>
                           )}
-                        </div>
-                      </div>
-                      <span className={styles.expandIcon}>
-                        {isExpanded ? '▼' : '▶'}
-                      </span>
-                    </button>
-                    {isExpanded && (
-                      <div id={panelId} className={styles.apiModels}>
-                        {Object.entries(api.models).map(([model, stats]) => (
-                          <div key={model} className={styles.modelRow}>
-                            <span className={styles.modelName}>{model}</span>
-                            <span className={styles.modelStat}>
-                              <span className={styles.requestCountCell}>
-                                <span>{stats.requests.toLocaleString()}</span>
-                                <span className={styles.requestBreakdown}>
-                                  (<span className={styles.statSuccess}>{stats.successCount.toLocaleString()}</span>{' '}
-                                  <span className={styles.statFailure}>{stats.failureCount.toLocaleString()}</span>)
-                                </span>
-                              </span>
+                          <td className={styles.tableCellMono}>
+                            <span className={styles.apiModelCountBadge}>
+                              {Object.keys(api.models).length}
                             </span>
-                            <span className={styles.modelStat}>{formatCompactNumber(stats.tokens)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                          </td>
+                          <td className={styles.tableCellStatus}>
+                            <button
+                              type="button"
+                              className={styles.apiExpandButton}
+                              onClick={() => toggleExpand(api.endpoint)}
+                              aria-expanded={isExpanded}
+                              aria-controls={panelId}
+                            >
+                              {isExpanded ? '收起' : '展开'}
+                            </button>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr className={styles.apiExpandedRow}>
+                            <td colSpan={hasPrices ? 7 : 6}>
+                              <div id={panelId} className={styles.apiModelsInline}>
+                                {Object.entries(api.models).map(([model, stats]) => (
+                                  <div key={model} className={styles.apiModelChip}>
+                                    <span className={styles.apiModelChipName} title={model}>{model}</span>
+                                    <span className={styles.apiModelChipMeta}>
+                                      {stats.requests.toLocaleString()} / {formatCompactNumber(stats.tokens)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
+          <div className={styles.usageTablePagination}>
+            <UsageTablePagination
+              totalItems={sorted.length}
+              currentPage={currentPage}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={handlePageSizeChange}
+            />
           </div>
         </>
       ) : (

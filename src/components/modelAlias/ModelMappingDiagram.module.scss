@@ -242,42 +242,45 @@
 
 .contextMenu {
   position: fixed;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: color-mix(in srgb, var(--bg-primary) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
+  border-radius: 10px;
+  box-shadow: 0 14px 28px rgba(2, 6, 23, 0.26);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   z-index: 9999;
-  min-width: 120px;
+  min-width: 132px;
   overflow: hidden;
-  padding: 4px 0;
+  padding: 6px;
 
   .menuItem {
-    padding: 8px 12px;
+    padding: 9px 12px;
     font-size: 13px;
     color: var(--text-primary);
     cursor: pointer;
-    transition: background-color 0.1s;
+    transition: background-color 0.15s ease, color 0.15s ease;
     display: flex;
     align-items: center;
     gap: 8px;
+    border-radius: 7px;
 
     &:hover {
-      background-color: var(--bg-secondary);
+      background-color: color-mix(in srgb, var(--bg-secondary) 86%, transparent);
     }
 
     &.danger {
       color: var(--error-color);
 
       &:hover {
-        background-color: var(--bg-error-light);
+        background-color: color-mix(in srgb, var(--bg-error-light) 84%, transparent);
       }
     }
   }
 
   .menuDivider {
     height: 1px;
-    margin: 4px 0;
-    background: var(--border-color);
+    margin: 6px 2px;
+    background: color-mix(in srgb, var(--border-color) 70%, transparent);
     padding: 0;
     cursor: default;
     pointer-events: none;

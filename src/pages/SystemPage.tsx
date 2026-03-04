@@ -388,17 +388,19 @@ export function SystemPage() {
         ) : models.length === 0 ? (
           <div className="hint">{t('system_info.models_empty')}</div>
         ) : (
-          <div className="item-list">
+          <div className={`item-list ${styles.modelsGroupedList}`}>
             {groupedModels.map((group) => {
               const iconSrc = getIconForCategory(group.id);
               return (
-                <div key={group.id} className="item-row">
-                  <div className="item-meta">
+                <div key={group.id} className={`item-row ${styles.modelsGroupedRow}`}>
+                  <div className={`item-meta ${styles.modelsGroupedMeta}`}>
                     <div className={styles.groupTitle}>
                       {iconSrc && <img src={iconSrc} alt="" className={styles.groupIcon} />}
                       <span className="item-title">{group.label}</span>
                     </div>
-                    <div className="item-subtitle">{t('system_info.models_count', { count: group.items.length })}</div>
+                    <div className={`item-subtitle ${styles.modelsGroupedCount}`}>
+                      {t('system_info.models_count', { count: group.items.length })}
+                    </div>
                   </div>
                   <div className={styles.modelTags}>
                     {group.items.map((model) => (

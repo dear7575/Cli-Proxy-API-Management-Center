@@ -1,4 +1,4 @@
-import type { AmpcodeConfig, AmpcodeModelMapping, ApiKeyEntry } from '@/types';
+import type { AmpcodeConfig, AmpcodeModelMapping, ApiKeyEntry, ModelAlias } from '@/types';
 import { buildCandidateUsageSourceIds, type KeyStatBucket, type KeyStats } from '@/utils/usage';
 import type { AmpcodeFormState, ModelEntry } from './types';
 
@@ -33,6 +33,41 @@ export const parseExcludedModels = parseTextList;
 
 export const excludedModelsToText = (models?: string[]) =>
   Array.isArray(models) ? models.join('\n') : '';
+
+export interface ModelDisplayItem {
+  primary: string;
+  secondary?: string;
+}
+
+export const getModelDisplayNames = (models?: ModelAlias[]) =>
+  (models || [])
+    .map((model) => {
+      const name = String(model?.name ?? '').trim();
+      const alias = String(model?.alias ?? '').trim();
+      if (!name) return null;
+      if (!alias || alias === name) {
+        return { primary: name } satisfies ModelDisplayItem;
+      }
+      return { primary: name, secondary: alias } satisfies ModelDisplayItem;
+    })
+    .filter((item): item is ModelDisplayItem => Boolean(item));
+
+export const getExcludedModelDisplayNames = (models?: string[]) =>
+  stripDisableAllModelsRule(models)
+    .map((model) => String(model ?? '').trim())
+    .filter(Boolean);
+
+export const getHeaderDisplayNames = (headers?: Record<string, string>) =>
+  Object.entries(headers || {})
+    .map(([key, value]) => {
+      const normalizedKey = String(key ?? '').trim();
+      const normalizedValue = String(value ?? '').trim();
+      if (!normalizedKey && !normalizedValue) return '';
+      if (!normalizedValue) return normalizedKey;
+      if (!normalizedKey) return normalizedValue;
+      return `${normalizedKey}: ${normalizedValue}`;
+    })
+    .filter(Boolean);
 
 export const normalizeOpenAIBaseUrl = (baseUrl: string): string => {
   let trimmed = String(baseUrl || '').trim();

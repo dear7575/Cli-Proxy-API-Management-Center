@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { IconChevronDown } from './icons';
+import styles from './AutocompleteInput.module.scss';
 
 interface AutocompleteInputProps {
   label?: string;
@@ -99,10 +100,10 @@ export function AutocompleteInput({
   return (
     <div className={`form-group ${wrapperClassName}`} ref={containerRef} style={wrapperStyle}>
       {label && <label htmlFor={id}>{label}</label>}
-      <div style={{ position: 'relative' }}>
+      <div className={styles.fieldWrap}>
         <input 
             id={id}
-            className={`input ${className}`.trim()} 
+            className={`input ${styles.fieldInput} ${className}`.trim()} 
             value={value}
             onChange={handleInputChange}
             onFocus={() => setIsOpen(true)}
@@ -110,58 +111,27 @@ export function AutocompleteInput({
             placeholder={placeholder}
             disabled={disabled}
             autoComplete="off"
-            style={{ paddingRight: 32 }}
         />
         <div 
-            style={{ 
-                position: 'absolute', 
-                right: 8, 
-                top: '50%', 
-                transform: 'translateY(-50%)',
-                display: 'flex',
-                alignItems: 'center',
-                pointerEvents: disabled ? 'none' : 'auto',
-                cursor: 'pointer',
-                height: '100%'
-            }}
+            className={`${styles.rightControls} ${disabled ? styles.rightControlsDisabled : ''}`.trim()}
             onClick={() => !disabled && setIsOpen(!isOpen)}
         >
             {rightElement}
-            <IconChevronDown size={16} style={{ opacity: 0.5, marginLeft: 4 }} />
+            <IconChevronDown size={16} className={styles.chevronIcon} />
         </div>
 
         {isOpen && filteredOptions.length > 0 && !disabled && (
-            <div className="autocomplete-dropdown" style={{
-                position: 'absolute',
-                top: 'calc(100% + 4px)',
-                left: 0,
-                right: 0,
-                zIndex: 1000,
-                backgroundColor: 'var(--bg-secondary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                maxHeight: 200,
-                overflowY: 'auto',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-            }}>
+            <div className={styles.dropdown}>
                 {filteredOptions.map((opt, index) => (
                     <div
                         key={`${opt.value}-${index}`}
                         onClick={() => handleSelect(opt.value)}
-                        style={{
-                            padding: '8px 12px',
-                            cursor: 'pointer',
-                            backgroundColor: index === highlightedIndex ? 'var(--bg-tertiary)' : 'transparent',
-                            color: 'var(--text-primary)',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            fontSize: '0.9rem'
-                        }}
+                        className={`${styles.option} ${index === highlightedIndex ? styles.optionActive : ''}`.trim()}
                         onMouseEnter={() => setHighlightedIndex(index)}
                     >
-                        <span style={{ fontWeight: 500 }}>{opt.value}</span>
+                        <span className={styles.optionValue}>{opt.value}</span>
                         {opt.label && opt.label !== opt.value && (
-                            <span style={{ fontSize: '0.85em', color: 'var(--text-secondary)' }}>{opt.label}</span>
+                            <span className={styles.optionLabel}>{opt.label}</span>
                         )}
                     </div>
                 ))}

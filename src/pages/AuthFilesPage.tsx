@@ -1,38 +1,36 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ChangeEvent,
-} from 'react';
-import { createPortal } from 'react-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { animate } from 'motion/mini';
-import type { AnimationPlaybackControlsWithThen } from 'motion-dom';
 import { useInterval } from '@/hooks/useInterval';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { usePageTransitionLayer } from '@/components/common/PageTransitionLayer';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { copyToClipboard } from '@/utils/clipboard';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { Select } from '@/components/ui/Select';
+import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
+import { CountTooltipCell } from '@/components/providers/CountTooltipCell';
 import {
-  MAX_CARD_PAGE_SIZE,
-  MIN_CARD_PAGE_SIZE,
-  QUOTA_PROVIDER_TYPES,
+  IconBot,
+  IconCode,
+  IconDownload,
+  IconInfo,
+  IconTrash2,
+} from '@/components/ui/icons';
+import { ProviderStatusBar } from '@/components/providers/ProviderStatusBar';
+import { copyToClipboard } from '@/utils/clipboard';
+import { formatFileSize } from '@/utils/format';
+import { calculateStatusBarData, normalizeAuthIndex } from '@/utils/usage';
+import {
   clampCardPageSize,
+  formatModified,
   getTypeColor,
   getTypeLabel,
   isRuntimeOnlyAuthFile,
-  normalizeProviderKey,
-  type QuotaProviderType,
+  resolveAuthFileStats,
   type ResolvedTheme,
 } from '@/features/authFiles/constants';
-import { AuthFileCard } from '@/features/authFiles/components/AuthFileCard';
 import { AuthFileDetailModal } from '@/features/authFiles/components/AuthFileDetailModal';
 import { AuthFileModelsModal } from '@/features/authFiles/components/AuthFileModelsModal';
 import { AuthFilesPrefixProxyEditorModal } from '@/features/authFiles/components/AuthFilesPrefixProxyEditorModal';
@@ -49,10 +47,10 @@ import { useAuthStore, useNotificationStore, useThemeStore } from '@/stores';
 import type { AuthFileItem } from '@/types';
 import styles from './AuthFilesPage.module.scss';
 
-const easePower3Out = (progress: number) => 1 - (1 - progress) ** 4;
-const easePower2In = (progress: number) => progress ** 3;
-const BATCH_BAR_BASE_TRANSFORM = 'translateX(-50%)';
-const BATCH_BAR_HIDDEN_TRANSFORM = 'translateX(-50%) translateY(56px)';
+const DEFAULT_PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [10, 20, 30] as const;
+
+type PaginationItem = number | 'left-ellipsis' | 'right-ellipsis';
 
 export function AuthFilesPage() {
   const { t } = useTranslation();
@@ -65,23 +63,17 @@ export function AuthFilesPage() {
 
   const [filter, setFilter] = useState<'all' | string>('all');
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(9);
-  const [pageSizeInput, setPageSizeInput] = useState('9');
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<AuthFileItem | null>(null);
   const [viewMode, setViewMode] = useState<'diagram' | 'list'>('list');
-  const [batchActionBarVisible, setBatchActionBarVisible] = useState(false);
-  const floatingBatchActionsRef = useRef<HTMLDivElement>(null);
-  const batchActionAnimationRef = useRef<AnimationPlaybackControlsWithThen | null>(null);
-  const previousSelectionCountRef = useRef(0);
-  const selectionCountRef = useRef(0);
 
   const { keyStats, usageDetails, loadKeyStats, refreshKeyStats } = useAuthFilesStats();
   const {
     files,
     selectedFiles,
-    selectionCount,
     loading,
     error,
     uploading,
@@ -97,8 +89,6 @@ export function AuthFilesPage() {
     handleDownload,
     handleStatusToggle,
     toggleSelect,
-    selectAllVisible,
-    deselectAll,
     batchSetStatus,
     batchDelete,
   } = useAuthFilesData({ refreshKeyStats });
@@ -148,12 +138,6 @@ export function AuthFilesPage() {
   });
 
   const disableControls = connectionStatus !== 'connected';
-  const normalizedFilter = normalizeProviderKey(String(filter));
-  const quotaFilterType: QuotaProviderType | null = QUOTA_PROVIDER_TYPES.has(
-    normalizedFilter as QuotaProviderType
-  )
-    ? (normalizedFilter as QuotaProviderType)
-    : null;
 
   useEffect(() => {
     const persisted = readAuthFilesUiState();
@@ -176,46 +160,6 @@ export function AuthFilesPage() {
   useEffect(() => {
     writeAuthFilesUiState({ filter, search, page, pageSize });
   }, [filter, search, page, pageSize]);
-
-  useEffect(() => {
-    setPageSizeInput(String(pageSize));
-  }, [pageSize]);
-
-  const commitPageSizeInput = (rawValue: string) => {
-    const trimmed = rawValue.trim();
-    if (!trimmed) {
-      setPageSizeInput(String(pageSize));
-      return;
-    }
-
-    const value = Number(trimmed);
-    if (!Number.isFinite(value)) {
-      setPageSizeInput(String(pageSize));
-      return;
-    }
-
-    const next = clampCardPageSize(value);
-    setPageSize(next);
-    setPageSizeInput(String(next));
-    setPage(1);
-  };
-
-  const handlePageSizeChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const rawValue = event.currentTarget.value;
-    setPageSizeInput(rawValue);
-
-    const trimmed = rawValue.trim();
-    if (!trimmed) return;
-
-    const parsed = Number(trimmed);
-    if (!Number.isFinite(parsed)) return;
-
-    const rounded = Math.round(parsed);
-    if (rounded < MIN_CARD_PAGE_SIZE || rounded > MAX_CARD_PAGE_SIZE) return;
-
-    setPageSize(rounded);
-    setPage(1);
-  };
 
   const handleHeaderRefresh = useCallback(async () => {
     await Promise.all([loadFiles(), refreshKeyStats(), loadExcluded(), loadModelAlias()]);
@@ -245,40 +189,137 @@ export function AuthFilesPage() {
         types.add(file.type);
       }
     });
-    return Array.from(types);
+    return [
+      'all',
+      ...Array.from(types)
+        .filter((type) => type !== 'all')
+        .sort((left, right) => left.localeCompare(right)),
+    ];
   }, [files]);
 
-  const typeCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: files.length };
-    files.forEach((file) => {
-      if (!file.type) return;
-      counts[file.type] = (counts[file.type] || 0) + 1;
-    });
-    return counts;
-  }, [files]);
+  const typeFilterOptions = useMemo(
+    () =>
+      existingTypes.map((type) => ({
+        value: type,
+        label: getTypeLabel(t, type),
+      })),
+    [existingTypes, t]
+  );
 
   const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+
     return files.filter((item) => {
       const matchType = filter === 'all' || item.type === filter;
-      const term = search.trim().toLowerCase();
+      const matchStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'enabled' ? !item.disabled : Boolean(item.disabled));
       const matchSearch =
         !term ||
         item.name.toLowerCase().includes(term) ||
         (item.type || '').toString().toLowerCase().includes(term) ||
         (item.provider || '').toString().toLowerCase().includes(term);
-      return matchType && matchSearch;
+
+      return matchType && matchStatus && matchSearch;
     });
-  }, [files, filter, search]);
+  }, [files, filter, search, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const start = (currentPage - 1) * pageSize;
-  const pageItems = filtered.slice(start, start + pageSize);
-  const selectablePageItems = useMemo(
-    () => pageItems.filter((file) => !isRuntimeOnlyAuthFile(file)),
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageItems = filtered.slice(pageStart, pageStart + pageSize);
+
+  const selectableFilteredNames = useMemo(
+    () => filtered.filter((item) => !isRuntimeOnlyAuthFile(item)).map((item) => item.name),
+    [filtered]
+  );
+  const selectablePageNames = useMemo(
+    () => pageItems.filter((item) => !isRuntimeOnlyAuthFile(item)).map((item) => item.name),
     [pageItems]
   );
+
   const selectedNames = useMemo(() => Array.from(selectedFiles), [selectedFiles]);
+  const hasSelection = selectedNames.length > 0;
+
+  const isCurrentPageFullySelected =
+    selectablePageNames.length > 0 && selectablePageNames.every((name) => selectedFiles.has(name));
+  const isAllFilteredSelected =
+    selectableFilteredNames.length > 0 && selectableFilteredNames.every((name) => selectedFiles.has(name));
+
+  const paginationItems = useMemo<PaginationItem[]>(() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    const items: PaginationItem[] = [1];
+    let start = Math.max(2, currentPage - 1);
+    let end = Math.min(totalPages - 1, currentPage + 1);
+
+    if (currentPage <= 3) {
+      start = 2;
+      end = 4;
+    } else if (currentPage >= totalPages - 2) {
+      start = totalPages - 3;
+      end = totalPages - 1;
+    }
+
+    if (start > 2) {
+      items.push('left-ellipsis');
+    }
+
+    for (let pageNumber = start; pageNumber <= end; pageNumber += 1) {
+      items.push(pageNumber);
+    }
+
+    if (end < totalPages - 1) {
+      items.push('right-ellipsis');
+    }
+
+    items.push(totalPages);
+    return items;
+  }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filter, search, statusFilter, pageSize]);
+
+  useEffect(() => {
+    if (page <= totalPages) return;
+    setPage(totalPages);
+  }, [page, totalPages]);
+
+  const applySelection = useCallback(
+    (names: string[], shouldSelect: boolean) => {
+      names.forEach((name) => {
+        const alreadySelected = selectedFiles.has(name);
+        if (shouldSelect && !alreadySelected) {
+          toggleSelect(name);
+        }
+        if (!shouldSelect && alreadySelected) {
+          toggleSelect(name);
+        }
+      });
+    },
+    [selectedFiles, toggleSelect]
+  );
+
+  const toggleCurrentPageSelection = useCallback(() => {
+    if (selectablePageNames.length === 0) return;
+    applySelection(selectablePageNames, !isCurrentPageFullySelected);
+  }, [applySelection, isCurrentPageFullySelected, selectablePageNames]);
+
+  const toggleAllFilteredSelection = useCallback(() => {
+    if (selectableFilteredNames.length === 0) return;
+    applySelection(selectableFilteredNames, !isAllFilteredSelected);
+  }, [applySelection, isAllFilteredSelected, selectableFilteredNames]);
+
+  const handleResetFilters = () => {
+    setSearch('');
+    setFilter('all');
+    setStatusFilter('all');
+    setPageSize(DEFAULT_PAGE_SIZE);
+    setPage(1);
+  };
 
   const showDetails = (file: AuthFileItem) => {
     setSelectedFile(file);
@@ -328,127 +369,6 @@ export function AuthFilesPage() {
     [filter, navigate]
   );
 
-  useLayoutEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const actionsEl = floatingBatchActionsRef.current;
-    if (!actionsEl) {
-      document.documentElement.style.removeProperty('--auth-files-action-bar-height');
-      return;
-    }
-
-    const updatePadding = () => {
-      const height = actionsEl.getBoundingClientRect().height;
-      document.documentElement.style.setProperty('--auth-files-action-bar-height', `${height}px`);
-    };
-
-    updatePadding();
-    window.addEventListener('resize', updatePadding);
-
-    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updatePadding);
-    ro?.observe(actionsEl);
-
-    return () => {
-      ro?.disconnect();
-      window.removeEventListener('resize', updatePadding);
-      document.documentElement.style.removeProperty('--auth-files-action-bar-height');
-    };
-  }, [batchActionBarVisible, selectionCount]);
-
-  useEffect(() => {
-    selectionCountRef.current = selectionCount;
-    if (selectionCount > 0) {
-      setBatchActionBarVisible(true);
-    }
-  }, [selectionCount]);
-
-  useLayoutEffect(() => {
-    if (!batchActionBarVisible) return;
-    const currentCount = selectionCount;
-    const previousCount = previousSelectionCountRef.current;
-    const actionsEl = floatingBatchActionsRef.current;
-    if (!actionsEl) return;
-
-    batchActionAnimationRef.current?.stop();
-    batchActionAnimationRef.current = null;
-
-    if (currentCount > 0 && previousCount === 0) {
-      batchActionAnimationRef.current = animate(
-        actionsEl,
-        {
-          transform: [BATCH_BAR_HIDDEN_TRANSFORM, BATCH_BAR_BASE_TRANSFORM],
-          opacity: [0, 1],
-        },
-        {
-          duration: 0.28,
-          ease: easePower3Out,
-          onComplete: () => {
-            actionsEl.style.transform = BATCH_BAR_BASE_TRANSFORM;
-            actionsEl.style.opacity = '1';
-          },
-        }
-      );
-    } else if (currentCount === 0 && previousCount > 0) {
-      batchActionAnimationRef.current = animate(
-        actionsEl,
-        {
-          transform: [BATCH_BAR_BASE_TRANSFORM, BATCH_BAR_HIDDEN_TRANSFORM],
-          opacity: [1, 0],
-        },
-        {
-          duration: 0.22,
-          ease: easePower2In,
-          onComplete: () => {
-            if (selectionCountRef.current === 0) {
-              setBatchActionBarVisible(false);
-            }
-          },
-        }
-      );
-    }
-
-    previousSelectionCountRef.current = currentCount;
-  }, [batchActionBarVisible, selectionCount]);
-
-  useEffect(
-    () => () => {
-      batchActionAnimationRef.current?.stop();
-      batchActionAnimationRef.current = null;
-    },
-    []
-  );
-
-  const renderFilterTags = () => (
-    <div className={styles.filterTags}>
-      {existingTypes.map((type) => {
-        const isActive = filter === type;
-        const color =
-          type === 'all'
-            ? { bg: 'var(--bg-tertiary)', text: 'var(--text-primary)' }
-            : getTypeColor(type, resolvedTheme);
-        const activeTextColor = resolvedTheme === 'dark' ? '#111827' : '#fff';
-        return (
-          <button
-            key={type}
-            className={`${styles.filterTag} ${isActive ? styles.filterTagActive : ''}`}
-            style={{
-              backgroundColor: isActive ? color.text : color.bg,
-              color: isActive ? activeTextColor : color.text,
-              borderColor: color.text,
-            }}
-            onClick={() => {
-              setFilter(type);
-              setPage(1);
-            }}
-          >
-            <span className={styles.filterTagLabel}>{getTypeLabel(t, type)}</span>
-            <span className={styles.filterTagCount}>{typeCounts[type] ?? 0}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-
   const titleNode = (
     <div className={styles.titleWrapper}>
       <span>{t('auth_files.title_section')}</span>
@@ -496,7 +416,7 @@ export function AuthFilesPage() {
               type="file"
               accept=".json,application/json"
               multiple
-              style={{ display: 'none' }}
+              className={styles.hiddenInput}
               onChange={handleFileChange}
             />
           </div>
@@ -504,38 +424,106 @@ export function AuthFilesPage() {
       >
         {error && <div className={styles.errorBox}>{error}</div>}
 
-        <div className={styles.filterSection}>
-          {renderFilterTags()}
-
-          <div className={styles.filterControls}>
-            <div className={styles.filterItem}>
-              <label>{t('auth_files.search_label')}</label>
-              <Input
+        <div className={`provider-list-toolbar ${styles.authTableToolbar}`}>
+          <div className="provider-list-toolbar-left">
+            <div className="provider-list-search">
+              <input
+                className="input"
                 value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
+                onChange={(event) => setSearch(event.target.value)}
                 placeholder={t('auth_files.search_placeholder')}
               />
             </div>
-            <div className={styles.filterItem}>
-              <label>{t('auth_files.page_size_label')}</label>
-              <input
-                className={styles.pageSizeSelect}
-                type="number"
-                min={MIN_CARD_PAGE_SIZE}
-                max={MAX_CARD_PAGE_SIZE}
-                step={1}
-                value={pageSizeInput}
-                onChange={handlePageSizeChange}
-                onBlur={(e) => commitPageSizeInput(e.currentTarget.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.currentTarget.blur();
-                  }
-                }}
+            <div className={styles.authTableTypeFilter}>
+              <Select
+                value={filter}
+                options={typeFilterOptions}
+                onChange={(value) => setFilter(value)}
+                className={styles.authTableTypeSelect}
+                ariaLabel={t('auth_files.file_type', { defaultValue: '类型' })}
+                fullWidth={false}
               />
+            </div>
+            <div className="provider-list-status-group">
+              <Button
+                size="sm"
+                variant={statusFilter === 'all' ? 'primary' : 'secondary'}
+                onClick={() => setStatusFilter('all')}
+              >
+                {t('ai_providers.list_filter_all', { defaultValue: '全部' })}
+              </Button>
+              <Button
+                size="sm"
+                variant={statusFilter === 'enabled' ? 'primary' : 'secondary'}
+                onClick={() => setStatusFilter('enabled')}
+              >
+                {t('ai_providers.list_filter_enabled', { defaultValue: '启用' })}
+              </Button>
+              <Button
+                size="sm"
+                variant={statusFilter === 'disabled' ? 'primary' : 'secondary'}
+                onClick={() => setStatusFilter('disabled')}
+              >
+                {t('ai_providers.list_filter_disabled', { defaultValue: '停用' })}
+              </Button>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleResetFilters}
+              className="provider-list-reset-btn"
+            >
+              {t('ai_providers.list_reset_filters', { defaultValue: '重置' })}
+            </Button>
+          </div>
+
+          <div className="provider-list-toolbar-right">
+            <div className="provider-list-selection-group">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={toggleCurrentPageSelection}
+                disabled={selectablePageNames.length === 0}
+              >
+                {isCurrentPageFullySelected
+                  ? t('ai_providers.list_deselect_page')
+                  : t('ai_providers.list_select_page')}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={toggleAllFilteredSelection}
+                disabled={selectableFilteredNames.length === 0}
+              >
+                {isAllFilteredSelected
+                  ? t('ai_providers.list_deselect_all')
+                  : t('ai_providers.list_select_all')}
+              </Button>
+            </div>
+            <div className="provider-list-bulk-actions">
+              <Button
+                size="sm"
+                onClick={() => void batchSetStatus(selectedNames, true)}
+                disabled={disableControls || !hasSelection}
+              >
+                {t('auth_files.batch_enable')}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void batchSetStatus(selectedNames, false)}
+                disabled={disableControls || !hasSelection}
+              >
+                {t('auth_files.batch_disable')}
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => batchDelete(selectedNames)}
+                disabled={disableControls || !hasSelection}
+              >
+                {t('common.delete')}
+              </Button>
             </div>
           </div>
         </div>
@@ -548,60 +536,288 @@ export function AuthFilesPage() {
             description={t('auth_files.search_empty_desc')}
           />
         ) : (
-          <div
-            className={`${styles.fileGrid} ${quotaFilterType ? styles.fileGridQuotaManaged : ''}`}
-          >
-            {pageItems.map((file) => (
-              <AuthFileCard
-                key={file.name}
-                file={file}
-                selected={selectedFiles.has(file.name)}
-                resolvedTheme={resolvedTheme}
-                disableControls={disableControls}
-                deleting={deleting}
-                statusUpdating={statusUpdating}
-                quotaFilterType={quotaFilterType}
-                keyStats={keyStats}
-                statusBarCache={statusBarCache}
-                onShowModels={showModels}
-                onShowDetails={showDetails}
-                onDownload={handleDownload}
-                onOpenPrefixProxyEditor={openPrefixProxyEditor}
-                onDelete={handleDelete}
-                onToggleStatus={handleStatusToggle}
-                onToggleSelect={toggleSelect}
-              />
-            ))}
+          <div className={`provider-table-wrapper ${styles.authTableWrapper}`}>
+            <table className={`provider-table ${styles.authTable}`}>
+              <colgroup>
+                <col className={styles.authTableColSelect} />
+                <col className={styles.authTableColIndex} />
+                <col />
+                <col className={styles.authTableColType} />
+                <col className={styles.authTableColSize} />
+                <col className={styles.authTableColModified} />
+                <col className={styles.authTableColSuccess} />
+                <col className={styles.authTableColFailure} />
+                <col className={styles.authTableColHealth} />
+                <col className={styles.authTableColEnabled} />
+                <col className={styles.authTableColActions} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="provider-table-col-select" aria-label={t('ai_providers.list_select_row')} />
+                  <th className="provider-table-col-index">
+                    {t('common.serial_number', { defaultValue: '序号' })}
+                  </th>
+                  <th className={styles.authTableColName}>
+                    {t('auth_files.file_name', { defaultValue: '文件名' })}
+                  </th>
+                  <th className={styles.authTableColType}>{t('auth_files.file_type', { defaultValue: '类型' })}</th>
+                  <th className={styles.authTableColSize}>{t('auth_files.file_size')}</th>
+                  <th className={styles.authTableColModified}>{t('auth_files.file_modified')}</th>
+                  <th>{t('stats.success')}</th>
+                  <th>{t('stats.failure')}</th>
+                  <th className={styles.authTableColHealth}>{t('auth_files.health_status_label')}</th>
+                  <th>{t('auth_files.status_toggle_label')}</th>
+                  <th className="provider-table-col-actions">{t('common.action')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageItems.map((file, rowIndex) => {
+                  const serialNumber = pageStart + rowIndex + 1;
+                  const rowSelected = selectedFiles.has(file.name);
+                  const rowDisabled = Boolean(file.disabled);
+                  const isRuntimeOnly = isRuntimeOnlyAuthFile(file);
+                  const showModelsButton = !isRuntimeOnly || (file.type || '').toLowerCase() === 'aistudio';
+                  const typeLabel = getTypeLabel(t, file.type || 'unknown');
+                  const typeColor = getTypeColor(file.type || 'unknown', resolvedTheme);
+                  const stats = resolveAuthFileStats(file, keyStats);
+                  const rawAuthIndex = file['auth_index'] ?? file.authIndex;
+                  const authIndexKey = normalizeAuthIndex(rawAuthIndex);
+                  const statusData =
+                    (authIndexKey && statusBarCache.get(authIndexKey)) || calculateStatusBarData([]);
+                  const rawStatusMessage = String(file['status_message'] ?? file.statusMessage ?? '').trim();
+
+                  return (
+                    <tr
+                      key={file.name}
+                      className={`provider-table-row ${rowDisabled ? 'provider-table-row-disabled' : ''} ${
+                        rowSelected ? 'provider-table-row-selected' : ''
+                      }`}
+                    >
+                      <td className="provider-table-cell-select">
+                        {!isRuntimeOnly ? (
+                          <input
+                            type="checkbox"
+                            className="provider-list-row-checkbox"
+                            checked={rowSelected}
+                            onChange={(event) => {
+                              const checked = event.currentTarget.checked;
+                              const alreadySelected = selectedFiles.has(file.name);
+                              if (checked !== alreadySelected) {
+                                toggleSelect(file.name);
+                              }
+                            }}
+                            aria-label={t('ai_providers.list_select_row')}
+                          />
+                        ) : null}
+                      </td>
+                      <td className={`provider-table-cell-index ${styles.authTableCenterCell}`}>{serialNumber}</td>
+                      <td
+                        className={`provider-table-cell-ellipsis provider-table-cell-strong ${styles.authTableNameCell}`}
+                      >
+                        <CountTooltipCell
+                          items={[file.name]}
+                          triggerLabel={<span className={styles.authTableNameText}>{file.name}</span>}
+                          triggerClassName={styles.authTableNameTrigger}
+                          triggerAriaLabel={t('auth_files.file_name', { defaultValue: '文件名' })}
+                        />
+                      </td>
+                      <td className={`provider-table-cell-nowrap ${styles.authTableCenterCell}`}>
+                        <span className={styles.typeBadge} style={{ backgroundColor: typeColor.bg, color: typeColor.text }}>
+                          {typeLabel}
+                        </span>
+                      </td>
+                      <td
+                        className={`provider-table-cell-numeric ${styles.authTableCenterCell} ${styles.authTableCellSize}`}
+                      >
+                        {file.size ? formatFileSize(file.size) : '-'}
+                      </td>
+                      <td
+                        className={`provider-table-cell-nowrap ${styles.authTableCenterCell} ${styles.authTableCellModified}`}
+                      >
+                        {formatModified(file)}
+                      </td>
+                      <td
+                        className={`provider-table-cell-numeric provider-table-cell-success ${styles.authTableCenterCell}`}
+                      >
+                        {stats.success}
+                      </td>
+                      <td
+                        className={`provider-table-cell-numeric provider-table-cell-failure ${styles.authTableCenterCell}`}
+                      >
+                        {rawStatusMessage && stats.failure > 0 ? (
+                          <CountTooltipCell
+                            items={[rawStatusMessage]}
+                            tone="warning"
+                            triggerLabel={stats.failure}
+                            triggerAriaLabel={t('auth_files.failure_logs', {
+                              defaultValue: '查看失败日志',
+                            })}
+                          />
+                        ) : (
+                          stats.failure
+                        )}
+                      </td>
+                      <td
+                        className={`provider-table-cell-status ${styles.authTableCenterCell} ${styles.authTableCellHealth}`}
+                      >
+                        <div className={styles.authTableStatusCell}>
+                          <ProviderStatusBar statusData={statusData} styles={styles} />
+                        </div>
+                      </td>
+                      <td className={`provider-table-cell-switch ${styles.authTableCenterCell}`}>
+                        {!isRuntimeOnly ? (
+                          <ToggleSwitch
+                            ariaLabel={t('auth_files.status_toggle_label')}
+                            checked={!file.disabled}
+                            disabled={disableControls || statusUpdating[file.name] === true}
+                            onChange={(value) => void handleStatusToggle(file, value)}
+                          />
+                        ) : (
+                          <span className={styles.virtualBadge}>{t('auth_files.type_virtual')}</span>
+                        )}
+                      </td>
+                      <td className="provider-table-cell-actions">
+                        <div className="provider-table-actions">
+                          {showModelsButton ? (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => showModels(file)}
+                              className={styles.iconButton}
+                              title={t('auth_files.models_button')}
+                              disabled={disableControls}
+                            >
+                              <IconBot className={styles.actionIcon} size={16} />
+                            </Button>
+                          ) : null}
+                          {!isRuntimeOnly ? (
+                            <>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => showDetails(file)}
+                                className={styles.iconButton}
+                                title={t('common.info')}
+                                disabled={disableControls}
+                              >
+                                <IconInfo className={styles.actionIcon} size={16} />
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => void handleDownload(file.name)}
+                                className={styles.iconButton}
+                                title={t('auth_files.download_button')}
+                                disabled={disableControls}
+                              >
+                                <IconDownload className={styles.actionIcon} size={16} />
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => openPrefixProxyEditor(file)}
+                                className={styles.iconButton}
+                                title={t('auth_files.prefix_proxy_button')}
+                                disabled={disableControls}
+                              >
+                                <IconCode className={styles.actionIcon} size={16} />
+                              </Button>
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                onClick={() => handleDelete(file.name)}
+                                className={styles.iconButton}
+                                title={t('auth_files.delete_button')}
+                                disabled={disableControls || deleting === file.name}
+                              >
+                                {deleting === file.name ? (
+                                  <LoadingSpinner size={14} />
+                                ) : (
+                                  <IconTrash2 className={styles.actionIcon} size={16} />
+                                )}
+                              </Button>
+                            </>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
 
-        {!loading && filtered.length > pageSize && (
-          <div className={styles.pagination}>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage <= 1}
-            >
-              {t('auth_files.pagination_prev')}
-            </Button>
-            <div className={styles.pageInfo}>
-              {t('auth_files.pagination_info', {
-                current: currentPage,
-                total: totalPages,
-                count: filtered.length,
-              })}
+        {!loading && filtered.length > 0 ? (
+          <div className="provider-list-pagination pagination">
+            <span className="provider-list-pagination-meta">
+              {filtered.length} {t('auth_files.files_count')}
+            </span>
+            <div className="provider-list-pagination-controls">
+              <div className="provider-list-page-size">
+                <select
+                  className="input provider-list-page-size-select"
+                  value={pageSize}
+                  onChange={(event) => {
+                    const next = Number(event.target.value);
+                    if (!Number.isFinite(next) || next <= 0) return;
+                    setPageSize(next);
+                  }}
+                >
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage <= 1}
+              >
+                {t('auth_files.pagination_prev')}
+              </Button>
+              <div
+                className="provider-list-pagination-pages"
+                aria-label={t('common.pagination', { defaultValue: '分页' })}
+              >
+                {paginationItems.map((item) => {
+                  if (typeof item !== 'number') {
+                    return (
+                      <span key={item} className="provider-list-pagination-ellipsis" aria-hidden="true">
+                        ...
+                      </span>
+                    );
+                  }
+
+                  const isActive = item === currentPage;
+                  return (
+                    <Button
+                      key={item}
+                      size="sm"
+                      variant={isActive ? 'primary' : 'secondary'}
+                      className="provider-list-page-button"
+                      onClick={() => setPage(item)}
+                      disabled={isActive}
+                    >
+                      {item}
+                    </Button>
+                  );
+                })}
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage >= totalPages}
+              >
+                {t('auth_files.pagination_next')}
+              </Button>
             </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage >= totalPages}
-            >
-              {t('auth_files.pagination_next')}
-            </Button>
           </div>
-        )}
+        ) : null}
       </Card>
 
       <OAuthExcludedCard
@@ -658,57 +874,6 @@ export function AuthFilesPage() {
         onSave={handlePrefixProxySave}
         onChange={handlePrefixProxyChange}
       />
-
-      {batchActionBarVisible && typeof document !== 'undefined'
-        ? createPortal(
-            <div className={styles.batchActionContainer} ref={floatingBatchActionsRef}>
-              <div className={styles.batchActionBar}>
-                <div className={styles.batchActionLeft}>
-                  <span className={styles.batchSelectionText}>
-                    {t('auth_files.batch_selected', { count: selectionCount })}
-                  </span>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => selectAllVisible(pageItems)}
-                    disabled={selectablePageItems.length === 0}
-                  >
-                    {t('auth_files.batch_select_all')}
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={deselectAll}>
-                    {t('auth_files.batch_deselect')}
-                  </Button>
-                </div>
-                <div className={styles.batchActionRight}>
-                  <Button
-                    size="sm"
-                    onClick={() => batchSetStatus(selectedNames, true)}
-                    disabled={disableControls || selectedNames.length === 0}
-                  >
-                    {t('auth_files.batch_enable')}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => batchSetStatus(selectedNames, false)}
-                    disabled={disableControls || selectedNames.length === 0}
-                  >
-                    {t('auth_files.batch_disable')}
-                  </Button>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() => batchDelete(selectedNames)}
-                    disabled={disableControls || selectedNames.length === 0}
-                  >
-                    {t('common.delete')}
-                  </Button>
-                </div>
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
     </div>
   );
 }

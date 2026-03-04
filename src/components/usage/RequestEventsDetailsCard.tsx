@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Select } from '@/components/ui/Select';
+import { CountTooltipCell } from '@/components/providers/CountTooltipCell';
 import { authFilesApi } from '@/services/api/authFiles';
 import type { GeminiKeyConfig, ProviderKeyConfig, OpenAIProviderConfig } from '@/types';
 import type { AuthFileItem } from '@/types/authFile';
@@ -15,6 +16,7 @@ import {
   normalizeAuthIndex
 } from '@/utils/usage';
 import { downloadBlob } from '@/utils/download';
+import { UsageTablePagination } from './UsageTablePagination';
 import styles from '@/pages/UsagePage.module.scss';
 
 const ALL_FILTER = '__all__';
@@ -75,7 +77,10 @@ export function RequestEventsDetailsCard({
   const [modelFilter, setModelFilter] = useState(ALL_FILTER);
   const [sourceFilter, setSourceFilter] = useState(ALL_FILTER);
   const [authIndexFilter, setAuthIndexFilter] = useState(ALL_FILTER);
+  const [searchKeyword, setSearchKeyword] = useState('');
   const [authFileMap, setAuthFileMap] = useState<Map<string, CredentialInfo>>(new Map());
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     let cancelled = false;
@@ -219,6 +224,7 @@ export function RequestEventsDetailsCard({
   const effectiveAuthIndexFilter = authIndexOptionSet.has(authIndexFilter)
     ? authIndexFilter
     : ALL_FILTER;
+  const normalizedSearchKeyword = searchKeyword.trim().toLowerCase();
 
   const filteredRows = useMemo(
     () =>
@@ -227,25 +233,58 @@ export function RequestEventsDetailsCard({
         const sourceMatched = effectiveSourceFilter === ALL_FILTER || row.source === effectiveSourceFilter;
         const authIndexMatched =
           effectiveAuthIndexFilter === ALL_FILTER || row.authIndex === effectiveAuthIndexFilter;
-        return modelMatched && sourceMatched && authIndexMatched;
+        const keywordMatched =
+          !normalizedSearchKeyword ||
+          row.model.toLowerCase().includes(normalizedSearchKeyword) ||
+          row.sourceType.toLowerCase().includes(normalizedSearchKeyword) ||
+          row.source.toLowerCase().includes(normalizedSearchKeyword) ||
+          row.sourceRaw.toLowerCase().includes(normalizedSearchKeyword) ||
+          row.authIndex.toLowerCase().includes(normalizedSearchKeyword);
+        return modelMatched && sourceMatched && authIndexMatched && keywordMatched;
       }),
-    [effectiveAuthIndexFilter, effectiveModelFilter, effectiveSourceFilter, rows]
+    [effectiveAuthIndexFilter, effectiveModelFilter, effectiveSourceFilter, normalizedSearchKeyword, rows]
   );
 
-  const renderedRows = useMemo(
+  const cappedRows = useMemo(
     () => filteredRows.slice(0, MAX_RENDERED_EVENTS),
     [filteredRows]
   );
+  const totalPages = Math.max(1, Math.ceil(cappedRows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const renderedRows = useMemo(
+    () => cappedRows.slice(pageStart, pageStart + pageSize),
+    [cappedRows, pageSize, pageStart]
+  );
+  const shouldEnableTableScroll = renderedRows.length > 10;
 
   const hasActiveFilters =
     effectiveModelFilter !== ALL_FILTER ||
     effectiveSourceFilter !== ALL_FILTER ||
-    effectiveAuthIndexFilter !== ALL_FILTER;
+    effectiveAuthIndexFilter !== ALL_FILTER ||
+    normalizedSearchKeyword.length > 0;
 
   const handleClearFilters = () => {
     setModelFilter(ALL_FILTER);
     setSourceFilter(ALL_FILTER);
     setAuthIndexFilter(ALL_FILTER);
+    setSearchKeyword('');
+    setPage(1);
+  };
+
+  useEffect(() => {
+    setPage(1);
+  }, [effectiveModelFilter, effectiveSourceFilter, effectiveAuthIndexFilter, normalizedSearchKeyword]);
+
+  useEffect(() => {
+    if (page <= totalPages) return;
+    setPage(totalPages);
+  }, [page, totalPages]);
+
+  const handlePageSizeChange = (size: number) => {
+    if (!Number.isFinite(size) || size < 1) return;
+    setPageSize(Math.floor(size));
+    setPage(1);
   };
 
   const handleExportCsv = () => {
@@ -254,6 +293,7 @@ export function RequestEventsDetailsCard({
     const csvHeader = [
       'timestamp',
       'model',
+      'source_type',
       'source',
       'source_raw',
       'auth_index',
@@ -269,6 +309,7 @@ export function RequestEventsDetailsCard({
       [
         row.timestamp,
         row.model,
+        row.sourceType,
         row.source,
         row.sourceRaw,
         row.authIndex,
@@ -297,6 +338,7 @@ export function RequestEventsDetailsCard({
     const payload = filteredRows.map((row) => ({
       timestamp: row.timestamp,
       model: row.model,
+      source_type: row.sourceType,
       source: row.source,
       source_raw: row.sourceRaw,
       auth_index: row.authIndex,
@@ -319,9 +361,53 @@ export function RequestEventsDetailsCard({
   };
 
   return (
-    <Card
-      title={t('usage_stats.request_events_title')}
-      extra={
+    <Card title={t('usage_stats.request_events_title')}>
+      <div className={styles.requestEventsTopBar}>
+        <div className={styles.requestEventsToolbar}>
+          <div className={`${styles.requestEventsFilterItem} ${styles.requestEventsSearchItem}`}>
+            <input
+              className={`input ${styles.requestEventsSearchInput}`}
+              value={searchKeyword}
+              onChange={(event) => setSearchKeyword(event.target.value)}
+              placeholder={t('usage_stats.request_events_search_placeholder', {
+                defaultValue: '搜索模型 / 类型 / 账号 / 认证索引'
+              })}
+              aria-label={t('usage_stats.request_events_search_placeholder', {
+                defaultValue: '搜索模型 / 类型 / 账号 / 认证索引'
+              })}
+            />
+          </div>
+          <div className={styles.requestEventsFilterItem}>
+            <Select
+              value={effectiveModelFilter}
+              options={modelOptions}
+              onChange={setModelFilter}
+              className={styles.requestEventsSelect}
+              ariaLabel={t('usage_stats.request_events_filter_model')}
+              fullWidth={false}
+            />
+          </div>
+          <div className={styles.requestEventsFilterItem}>
+            <Select
+              value={effectiveSourceFilter}
+              options={sourceOptions}
+              onChange={setSourceFilter}
+              className={styles.requestEventsSelect}
+              ariaLabel={t('usage_stats.request_events_filter_source')}
+              fullWidth={false}
+            />
+          </div>
+          <div className={styles.requestEventsFilterItem}>
+            <Select
+              value={effectiveAuthIndexFilter}
+              options={authIndexOptions}
+              onChange={setAuthIndexFilter}
+              className={styles.requestEventsSelect}
+              ariaLabel={t('usage_stats.request_events_filter_auth_index')}
+              fullWidth={false}
+            />
+          </div>
+        </div>
         <div className={styles.requestEventsActions}>
           <Button
             variant="ghost"
@@ -347,48 +433,6 @@ export function RequestEventsDetailsCard({
           >
             {t('usage_stats.export_json')}
           </Button>
-        </div>
-      }
-    >
-      <div className={styles.requestEventsToolbar}>
-        <div className={styles.requestEventsFilterItem}>
-          <span className={styles.requestEventsFilterLabel}>
-            {t('usage_stats.request_events_filter_model')}
-          </span>
-          <Select
-            value={effectiveModelFilter}
-            options={modelOptions}
-            onChange={setModelFilter}
-            className={styles.requestEventsSelect}
-            ariaLabel={t('usage_stats.request_events_filter_model')}
-            fullWidth={false}
-          />
-        </div>
-        <div className={styles.requestEventsFilterItem}>
-          <span className={styles.requestEventsFilterLabel}>
-            {t('usage_stats.request_events_filter_source')}
-          </span>
-          <Select
-            value={effectiveSourceFilter}
-            options={sourceOptions}
-            onChange={setSourceFilter}
-            className={styles.requestEventsSelect}
-            ariaLabel={t('usage_stats.request_events_filter_source')}
-            fullWidth={false}
-          />
-        </div>
-        <div className={styles.requestEventsFilterItem}>
-          <span className={styles.requestEventsFilterLabel}>
-            {t('usage_stats.request_events_filter_auth_index')}
-          </span>
-          <Select
-            value={effectiveAuthIndexFilter}
-            options={authIndexOptions}
-            onChange={setAuthIndexFilter}
-            className={styles.requestEventsSelect}
-            ariaLabel={t('usage_stats.request_events_filter_auth_index')}
-            fullWidth={false}
-          />
         </div>
       </div>
 
@@ -418,13 +462,29 @@ export function RequestEventsDetailsCard({
             )}
           </div>
 
-          <div className={styles.requestEventsTableWrapper}>
-            <table className={styles.table}>
+          <div
+            className={`${styles.requestEventsTableWrapper} ${shouldEnableTableScroll ? styles.requestEventsTableWrapperScrollable : ''}`.trim()}
+          >
+            <table className={`${styles.table} ${styles.requestEventsTable}`}>
+              <colgroup>
+                <col className={styles.requestEventsColTime} />
+                <col className={styles.requestEventsColModel} />
+                <col className={styles.requestEventsColSourceType} />
+                <col className={styles.requestEventsColSourceAccount} />
+                <col className={styles.requestEventsColAuthIndex} />
+                <col className={styles.requestEventsColResult} />
+                <col className={styles.requestEventsColToken} />
+                <col className={styles.requestEventsColToken} />
+                <col className={styles.requestEventsColToken} />
+                <col className={styles.requestEventsColToken} />
+                <col className={styles.requestEventsColToken} />
+              </colgroup>
               <thead>
                 <tr>
                   <th>{t('usage_stats.request_events_timestamp')}</th>
                   <th>{t('usage_stats.model_name')}</th>
-                  <th>{t('usage_stats.request_events_source')}</th>
+                  <th>{t('usage_stats.request_events_source_type')}</th>
+                  <th>{t('usage_stats.request_events_source_account')}</th>
                   <th>{t('usage_stats.request_events_auth_index')}</th>
                   <th>{t('usage_stats.request_events_result')}</th>
                   <th>{t('usage_stats.input_tokens')}</th>
@@ -437,35 +497,59 @@ export function RequestEventsDetailsCard({
               <tbody>
                 {renderedRows.map((row) => (
                   <tr key={row.id}>
-                    <td title={row.timestamp} className={styles.requestEventsTimestamp}>
+                    <td title={row.timestamp} className={`${styles.requestEventsTimestamp} ${styles.tableCellMono}`}>
                       {row.timestampLabel}
                     </td>
-                    <td className={styles.modelCell}>{row.model}</td>
-                    <td className={styles.requestEventsSourceCell} title={row.source}>
-                      <span>{row.source}</span>
-                      {row.sourceType && (
-                        <span className={styles.credentialType}>{row.sourceType}</span>
+                    <td className={`${styles.modelCell} ${styles.tableCellLeft}`} title={row.model}>
+                      <span className={styles.truncateText}>{row.model}</span>
+                    </td>
+                    <td className={styles.tableCellStatus} title={row.sourceType || '-'}>
+                      {row.sourceType ? (
+                        <span className={styles.requestEventsSourceTypeBadge}>{row.sourceType}</span>
+                      ) : (
+                        <span className={styles.requestEventsSourceTypeEmpty}>-</span>
                       )}
                     </td>
-                    <td className={styles.requestEventsAuthIndex} title={row.authIndex}>
+                    <td className={`${styles.requestEventsSourceCell} ${styles.tableCellLeft}`}>
+                      {row.source && row.source !== '-' ? (
+                        <CountTooltipCell
+                          items={[row.source]}
+                          triggerLabel={<span className={styles.requestEventsSourceText}>{row.source}</span>}
+                          triggerClassName={styles.requestEventsSourceTrigger}
+                          triggerAriaLabel={t('usage_stats.request_events_source_account')}
+                        />
+                      ) : (
+                        <span className={styles.requestEventsSourceText}>-</span>
+                      )}
+                    </td>
+                    <td className={`${styles.requestEventsAuthIndex} ${styles.tableCellMono}`} title={row.authIndex}>
                       {row.authIndex}
                     </td>
-                    <td>
+                    <td className={styles.tableCellStatus}>
                       <span
                         className={row.failed ? styles.requestEventsResultFailed : styles.requestEventsResultSuccess}
                       >
                         {row.failed ? t('stats.failure') : t('stats.success')}
                       </span>
                     </td>
-                    <td>{row.inputTokens.toLocaleString()}</td>
-                    <td>{row.outputTokens.toLocaleString()}</td>
-                    <td>{row.reasoningTokens.toLocaleString()}</td>
-                    <td>{row.cachedTokens.toLocaleString()}</td>
-                    <td>{row.totalTokens.toLocaleString()}</td>
+                    <td className={styles.tableCellMono}>{row.inputTokens.toLocaleString()}</td>
+                    <td className={styles.tableCellMono}>{row.outputTokens.toLocaleString()}</td>
+                    <td className={styles.tableCellMono}>{row.reasoningTokens.toLocaleString()}</td>
+                    <td className={styles.tableCellMono}>{row.cachedTokens.toLocaleString()}</td>
+                    <td className={styles.tableCellMono}>{row.totalTokens.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className={styles.usageTablePagination}>
+            <UsageTablePagination
+              totalItems={cappedRows.length}
+              currentPage={currentPage}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={handlePageSizeChange}
+            />
           </div>
         </>
       )}

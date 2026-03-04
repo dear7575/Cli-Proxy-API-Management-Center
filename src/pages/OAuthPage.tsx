@@ -501,7 +501,7 @@ export function OAuthPage() {
                 ref={vertexFileInputRef}
                 type="file"
                 accept=".json,application/json"
-                style={{ display: 'none' }}
+                className={styles.hiddenInput}
                 onChange={handleVertexFileChange}
               />
             </div>

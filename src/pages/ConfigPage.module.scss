@@ -11,17 +11,38 @@
   );
 }
 
+.pageHeader {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+  padding: 14px 16px;
+  margin-bottom: $spacing-xl;
+  border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
+  border-radius: $radius-lg;
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--primary-color) 8%, var(--bg-primary)) 0%,
+      color-mix(in srgb, var(--bg-primary) 96%, transparent) 56%
+    );
+  box-shadow: 0 12px 24px -24px rgba(2, 6, 23, 0.68);
+}
+
 .pageTitle {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0 0 $spacing-md 0;
+  font-size: clamp(26px, 2.7vw, 32px);
+  font-weight: 800;
+  color: color-mix(in srgb, var(--text-primary) 88%, var(--primary-color) 12%);
+  letter-spacing: -0.02em;
+  margin: 0;
 }
 
 .description {
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 1.6;
   color: var(--text-secondary);
-  margin: 0 0 $spacing-xl 0;
+  margin: 0;
+  width: 100%;
+  max-width: none;
 }
 
 .tabBar {
@@ -424,10 +445,9 @@
 @media (max-height: 820px) {
   .pageTitle {
     font-size: 24px;
-    margin-bottom: $spacing-sm;
   }
 
-  .description {
+  .pageHeader {
     margin-bottom: $spacing-lg;
   }
 

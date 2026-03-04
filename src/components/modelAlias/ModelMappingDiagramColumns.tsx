@@ -40,19 +40,19 @@ export function ProviderColumn({
       {providerNodes.map(({ provider, sources }) => {
         const collapsed = collapsedProviders.has(provider);
         const groupHeight = collapsed ? undefined : providerGroupHeights[provider];
+        const providerColor = getProviderColor(provider);
+        const providerGroupStyle = groupHeight ? { height: groupHeight } : undefined;
+        const providerItemStyle = { borderLeftColor: providerColor };
+        const providerLabelStyle = { color: providerColor };
         return (
-          <div
-            key={provider}
-            className={styles.providerGroup}
-            style={groupHeight ? { height: groupHeight } : undefined}
-          >
+          <div key={provider} className={styles.providerGroup} style={providerGroupStyle}>
             <div
               ref={(el) => {
                 if (el) providerRefs.current?.set(provider, el);
                 else providerRefs.current?.delete(provider);
               }}
               className={`${styles.item} ${styles.providerItem}`}
-              style={{ borderLeftColor: getProviderColor(provider) }}
+              style={providerItemStyle}
               onContextMenu={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -68,7 +68,7 @@ export function ProviderColumn({
               >
                 <span className={collapsed ? styles.chevronRight : styles.chevronDown} />
               </button>
-              <span className={styles.providerLabel} style={{ color: getProviderColor(provider) }}>
+              <span className={styles.providerLabel} style={providerLabelStyle}>
                 {provider}
               </span>
               <span className={styles.itemCount}>{sources.length}</span>
@@ -129,43 +129,43 @@ export function SourceColumn({
       <div className={styles.columnHeader}>{label}</div>
       {providerNodes.flatMap(({ provider, sources }) => {
         if (collapsedProviders.has(provider)) return [];
-        return sources.map((source) => (
-          <div
-            key={source.id}
-            ref={(el) => {
-              if (el) sourceRefs.current?.set(source.id, el);
-              else sourceRefs.current?.delete(source.id);
-            }}
-            className={`${styles.item} ${styles.sourceItem} ${
-              draggedSource?.id === source.id ? styles.dragging : ''
-            } ${dropTargetSource === source.id ? styles.dropTarget : ''} ${
-              selectedSourceId === source.id ? styles.selected : ''
-            }`}
-            onClick={() => onSelectSource?.(source)}
-            draggable={draggable}
-            onDragStart={(e) => onDragStart(e, source)}
-            onDragEnd={onDragEnd}
-            onDragOver={(e) => onDragOver(e, source)}
-            onDragLeave={onDragLeave}
-            onDrop={(e) => onDrop(e, source)}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onContextMenu(e, 'source', source.id);
-            }}
-          >
-            <span className={styles.itemName} title={source.name}>
-              {source.name}
-            </span>
+        return sources.map((source) => {
+          const sourceDotStyle = {
+            background: getProviderColor(source.provider),
+            opacity: source.aliases.length > 0 ? 1 : 0.3,
+          };
+          return (
             <div
-              className={styles.dot}
-              style={{
-                background: getProviderColor(source.provider),
-                opacity: source.aliases.length > 0 ? 1 : 0.3
+              key={source.id}
+              ref={(el) => {
+                if (el) sourceRefs.current?.set(source.id, el);
+                else sourceRefs.current?.delete(source.id);
               }}
-            />
-          </div>
-        ));
+              className={`${styles.item} ${styles.sourceItem} ${
+                draggedSource?.id === source.id ? styles.dragging : ''
+              } ${dropTargetSource === source.id ? styles.dropTarget : ''} ${
+                selectedSourceId === source.id ? styles.selected : ''
+              }`}
+              onClick={() => onSelectSource?.(source)}
+              draggable={draggable}
+              onDragStart={(e) => onDragStart(e, source)}
+              onDragEnd={onDragEnd}
+              onDragOver={(e) => onDragOver(e, source)}
+              onDragLeave={onDragLeave}
+              onDrop={(e) => onDrop(e, source)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onContextMenu(e, 'source', source.id);
+              }}
+            >
+              <span className={styles.itemName} title={source.name}>
+                {source.name}
+              </span>
+              <div className={styles.dot} style={sourceDotStyle} />
+            </div>
+          );
+        });
       })}
     </div>
   );

@@ -2,7 +2,9 @@ import { useTranslation } from 'react-i18next';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import type { AuthFileItem } from '@/types';
-import styles from '@/pages/AuthFilesPage.module.scss';
+import { formatFileSize } from '@/utils/format';
+import { formatModified } from '@/features/authFiles/constants';
+import styles from './AuthFileDetailModal.module.scss';
 
 export type AuthFileDetailModalProps = {
   open: boolean;
@@ -18,13 +20,27 @@ export function AuthFileDetailModal({ open, file, onClose, onCopyText }: AuthFil
     <Modal
       open={open}
       onClose={onClose}
-      title={file?.name || t('auth_files.title_section')}
+      className={styles.detailModal}
+      width={760}
+      title={
+        <span className={styles.titleWrap}>
+          <span className={styles.titleText}>
+            {t('auth_files.title_section', { defaultValue: '认证文件详情' })}
+          </span>
+          {file?.name && (
+            <span className={styles.fileNamePill} title={file.name}>
+              {file.name}
+            </span>
+          )}
+        </span>
+      }
       footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
+        <div className={styles.footerActions}>
+          <Button variant="secondary" onClick={onClose} className={styles.footerBtn}>
             {t('common.close')}
           </Button>
           <Button
+            className={styles.footerBtn}
             onClick={() => {
               if (!file) return;
               const text = JSON.stringify(file, null, 2);
@@ -33,12 +49,25 @@ export function AuthFileDetailModal({ open, file, onClose, onCopyText }: AuthFil
           >
             {t('common.copy')}
           </Button>
-        </>
+        </div>
       }
     >
       {file && (
-        <div className={styles.detailContent}>
-          <pre className={styles.jsonContent}>{JSON.stringify(file, null, 2)}</pre>
+        <div className={styles.content}>
+          <div className={styles.metaRow}>
+            <span className={styles.metaPill}>
+              {t('auth_files.file_type')}: {file.type || '-'}
+            </span>
+            <span className={styles.metaPill}>
+              {t('auth_files.file_size')}: {file.size ? formatFileSize(file.size) : '-'}
+            </span>
+            <span className={styles.metaPill}>
+              {t('auth_files.file_modified')}: {formatModified(file)}
+            </span>
+          </div>
+          <div className={styles.jsonPanel}>
+            <pre className={styles.jsonContent}>{JSON.stringify(file, null, 2)}</pre>
+          </div>
         </div>
       )}
     </Modal>

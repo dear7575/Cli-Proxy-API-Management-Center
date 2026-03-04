@@ -1,14 +1,22 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { Card } from '@/components/ui/Card';
 import {
   IconKey,
   IconBot,
   IconFileText,
-  IconSatellite
+  IconSatellite,
+  IconShield
 } from '@/components/ui/icons';
-import { useAuthStore, useConfigStore, useModelsStore } from '@/stores';
+import { useAuthStore, useConfigStore, useModelsStore, useUsageStatsStore, USAGE_STATS_STALE_TIME_MS } from '@/stores';
 import { apiKeysApi, providersApi, authFilesApi } from '@/services/api';
+import {
+  calculateRecentPerMinuteRates,
+  formatCompactNumber,
+  formatPerMinuteValue,
+  getModelNamesFromUsage
+} from '@/utils/usage';
 import styles from './DashboardPage.module.scss';
 
 interface QuickStat {
@@ -27,6 +35,16 @@ interface ProviderStats {
   openai: number | null;
 }
 
+interface UsageOverviewStat {
+  label: string;
+  value: string;
+}
+
+const toNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 export function DashboardPage() {
   const { t, i18n } = useTranslation();
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
@@ -38,6 +56,9 @@ export function DashboardPage() {
   const models = useModelsStore((state) => state.models);
   const modelsLoading = useModelsStore((state) => state.loading);
   const fetchModelsFromStore = useModelsStore((state) => state.fetchModels);
+  const usageSnapshot = useUsageStatsStore((state) => state.usage);
+  const usageLoading = useUsageStatsStore((state) => state.loading);
+  const loadUsageStats = useUsageStatsStore((state) => state.loadUsageStats);
 
   const [stats, setStats] = useState<{
     apiKeys: number | null;
@@ -156,10 +177,11 @@ export function DashboardPage() {
     if (connectionStatus === 'connected') {
       fetchStats();
       fetchModels();
+      void loadUsageStats({ staleTimeMs: USAGE_STATS_STALE_TIME_MS }).catch(() => {});
     } else {
       setLoading(false);
     }
-  }, [connectionStatus, fetchModels]);
+  }, [connectionStatus, fetchModels, loadUsageStats]);
 
   // Calculate total provider keys only when all provider stats are available.
   const providerStatsReady =
@@ -237,6 +259,71 @@ export function DashboardPage() {
         ? styles.configBadgeFillFirst
         : styles.configBadgeUnknown;
 
+  const usageTotalRequests = useMemo(
+    () => toNumber((usageSnapshot as Record<string, unknown> | null)?.total_requests),
+    [usageSnapshot]
+  );
+  const usageTotalTokens = useMemo(
+    () => toNumber((usageSnapshot as Record<string, unknown> | null)?.total_tokens),
+    [usageSnapshot]
+  );
+  const usageRateStats = useMemo(
+    () => calculateRecentPerMinuteRates(30, usageSnapshot),
+    [usageSnapshot]
+  );
+  const usageModelsUsed = useMemo(
+    () => getModelNamesFromUsage(usageSnapshot).length,
+    [usageSnapshot]
+  );
+  const usageOverviewStats = useMemo<UsageOverviewStat[]>(
+    () => [
+      {
+        label: t('dashboard.total_requests'),
+        value: usageTotalRequests.toLocaleString()
+      },
+      {
+        label: t('dashboard.total_tokens'),
+        value: formatCompactNumber(usageTotalTokens)
+      },
+      {
+        label: t('dashboard.rpm_30min'),
+        value: formatPerMinuteValue(usageRateStats.rpm)
+      },
+      {
+        label: t('dashboard.tpm_30min'),
+        value: formatPerMinuteValue(usageRateStats.tpm)
+      },
+      {
+        label: t('dashboard.models_used'),
+        value: usageModelsUsed.toLocaleString()
+      }
+    ],
+    [t, usageModelsUsed, usageRateStats.rpm, usageRateStats.tpm, usageTotalRequests, usageTotalTokens]
+  );
+  const hasUsageData =
+    usageTotalRequests > 0 ||
+    usageTotalTokens > 0 ||
+    usageModelsUsed > 0 ||
+    usageRateStats.requestCount > 0;
+  const connectionLabel = t(
+    connectionStatus === 'connected'
+      ? 'common.connected'
+      : connectionStatus === 'connecting'
+        ? 'common.connecting'
+        : 'common.disconnected'
+  );
+  const connectionValueClass =
+    connectionStatus === 'connected'
+      ? styles.connectionValueConnected
+      : connectionStatus === 'connecting'
+        ? styles.connectionValueConnecting
+        : styles.connectionValueDisconnected;
+  const connectionMetaParts = [
+    apiBase || '-',
+    serverVersion ? `v${serverVersion.trim().replace(/^[vV]+/, '')}` : ''
+  ].filter(Boolean);
+  const connectionMeta = connectionMetaParts.join(' · ');
+
   return (
     <div className={styles.dashboard}>
       <div className={styles.header}>
@@ -244,60 +331,75 @@ export function DashboardPage() {
         <p className={styles.subtitle}>{t('dashboard.subtitle')}</p>
       </div>
 
-      <div className={styles.connectionCard}>
-        <div className={styles.connectionStatus}>
-          <span
-            className={`${styles.statusDot} ${
-              connectionStatus === 'connected'
-                ? styles.connected
-                : connectionStatus === 'connecting'
-                  ? styles.connecting
-                  : styles.disconnected
-            }`}
-          />
-          <span className={styles.statusText}>
-            {t(
-              connectionStatus === 'connected'
-                ? 'common.connected'
-                : connectionStatus === 'connecting'
-                  ? 'common.connecting'
-                  : 'common.disconnected'
-            )}
-          </span>
-        </div>
-        <div className={styles.connectionInfo}>
-          <span className={styles.serverUrl}>{apiBase || '-'}</span>
-          {serverVersion && (
-            <span className={styles.serverVersion}>
-              v{serverVersion.trim().replace(/^[vV]+/, '')}
-            </span>
-          )}
-          {serverBuildDate && (
-            <span className={styles.buildDate}>
-              {new Date(serverBuildDate).toLocaleDateString(i18n.language)}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className={styles.statsGrid}>
-        {quickStats.map((stat) => (
-          <Link key={stat.path} to={stat.path} className={styles.statCard}>
-            <div className={styles.statIcon}>{stat.icon}</div>
+      <Card title={t('dashboard.quick_actions')} className={styles.sectionCard}>
+        <div className={styles.statsGrid}>
+          <div className={`${styles.statCard} ${styles.connectionStatCard}`}>
+            <div className={`${styles.statIcon} ${styles.connectionStatIcon}`}>
+              <IconShield size={24} />
+            </div>
             <div className={styles.statContent}>
-              <span className={styles.statValue}>{stat.loading ? '...' : stat.value}</span>
-              <span className={styles.statLabel}>{stat.label}</span>
-              {stat.sublabel && !stat.loading && (
-                <span className={styles.statSublabel}>{stat.sublabel}</span>
+              <span className={`${styles.statValue} ${connectionValueClass}`}>{connectionLabel}</span>
+              <span className={styles.statLabel}>{t('connection.status')}</span>
+              <span className={`${styles.statSublabel} ${styles.connectionStatMeta}`} title={connectionMeta}>
+                {connectionMeta}
+              </span>
+              {serverBuildDate && (
+                <span className={styles.statSublabel}>
+                  {new Date(serverBuildDate).toLocaleDateString(i18n.language)}
+                </span>
               )}
             </div>
+          </div>
+          {quickStats.map((stat) => (
+            <Link key={stat.path} to={stat.path} className={styles.statCard}>
+              <div className={styles.statIcon}>{stat.icon}</div>
+              <div className={styles.statContent}>
+                <span className={styles.statValue}>{stat.loading ? '...' : stat.value}</span>
+                <span className={styles.statLabel}>{stat.label}</span>
+                {stat.sublabel && !stat.loading && (
+                  <span className={styles.statSublabel}>{stat.sublabel}</span>
+                )}
+              </div>
+            </Link>
+          ))}
+        </div>
+      </Card>
+
+      <Card
+        title={t('dashboard.usage_overview')}
+        extra={
+          <Link to="/usage" className={styles.viewMoreLink}>
+            {t('dashboard.view_detailed_usage')} →
           </Link>
-        ))}
-      </div>
+        }
+        className={styles.sectionCard}
+      >
+        {usageLoading ? (
+          <div className={styles.usageLoading}>{t('common.loading')}</div>
+        ) : !usageSnapshot || !hasUsageData ? (
+          <div className={styles.usageEmpty}>{t('dashboard.no_usage_data')}</div>
+        ) : (
+          <div className={styles.usageGrid}>
+            {usageOverviewStats.map((item) => (
+              <div key={item.label} className={styles.usageCard}>
+                <span className={styles.usageValue}>{item.value}</span>
+                <span className={styles.usageLabel}>{item.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       {config && (
-        <div className={styles.section}>
-          <h2 className={styles.sectionTitle}>{t('dashboard.current_config')}</h2>
+        <Card
+          title={t('dashboard.current_config')}
+          extra={
+            <Link to="/config" className={styles.viewMoreLink}>
+              {t('dashboard.edit_settings')} →
+            </Link>
+          }
+          className={styles.sectionCard}
+        >
           <div className={styles.configGrid}>
             <div className={styles.configItem}>
               <span className={styles.configLabel}>{t('basic_settings.debug_enable')}</span>
@@ -340,10 +442,7 @@ export function DashboardPage() {
               </div>
             )}
           </div>
-          <Link to="/config" className={styles.viewMoreLink}>
-            {t('dashboard.edit_settings')} →
-          </Link>
-        </div>
+        </Card>
       )}
     </div>
   );

@@ -18,10 +18,11 @@ export function QuotaProgressBar({ percent, highThreshold, mediumThreshold }: Qu
           ? styles.quotaBarFillMedium
           : styles.quotaBarFillLow;
   const widthPercent = Math.round(normalized ?? 0);
+  const fillStyle = { width: `${widthPercent}%` };
 
   return (
     <div className={styles.quotaBar}>
-      <div className={`${styles.quotaBarFill} ${fillClass}`} style={{ width: `${widthPercent}%` }} />
+      <div className={`${styles.quotaBarFill} ${fillClass}`} style={fillStyle} />
     </div>
   );
 }

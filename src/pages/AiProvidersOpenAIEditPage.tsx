@@ -527,7 +527,7 @@ export function AiProvidersOpenAIEditPage() {
       isLoading={loading}
       loadingLabel={t('common.loading')}
     >
-      <Card>
+      <Card className={layoutStyles.formCard}>
         {invalidIndexParam || invalidIndex ? (
           <div className={styles.sectionHint}>{t('common.invalid_provider_index')}</div>
         ) : (

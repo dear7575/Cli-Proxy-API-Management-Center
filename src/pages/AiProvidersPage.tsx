@@ -67,6 +67,11 @@ export function AiProvidersPage() {
     return '';
   };
 
+  const normalizeIndices = (indices: number[]) =>
+    Array.from(new Set(indices))
+      .filter((index) => Number.isInteger(index) && index >= 0)
+      .sort((left, right) => left - right);
+
   const loadConfigs = useCallback(async () => {
     const hasValidCache = isCacheValid();
     if (!hasValidCache) {
@@ -255,6 +260,100 @@ export function AiProvidersPage() {
     }
   };
 
+  const setConfigEnabledBatch = async (
+    provider: 'gemini' | 'codex' | 'claude',
+    indices: number[],
+    enabled: boolean
+  ) => {
+    const normalized = normalizeIndices(indices);
+    if (!normalized.length) return;
+
+    if (provider === 'gemini') {
+      const previousList = geminiKeys;
+      const indexSet = new Set(normalized);
+      const nextList = previousList.map((item, idx) => {
+        if (!indexSet.has(idx)) return item;
+        return {
+          ...item,
+          excludedModels: enabled
+            ? withoutDisableAllModelsRule(item.excludedModels)
+            : withDisableAllModelsRule(item.excludedModels),
+        };
+      });
+
+      setConfigSwitchingKey(`${provider}:batch`);
+      setGeminiKeys(nextList);
+      updateConfigValue('gemini-api-key', nextList);
+      clearCache('gemini-api-key');
+
+      try {
+        await providersApi.saveGeminiKeys(nextList);
+        showNotification(
+          enabled ? t('notification.config_enabled') : t('notification.config_disabled'),
+          'success'
+        );
+      } catch (err: unknown) {
+        const message = getErrorMessage(err);
+        setGeminiKeys(previousList);
+        updateConfigValue('gemini-api-key', previousList);
+        clearCache('gemini-api-key');
+        showNotification(`${t('notification.update_failed')}: ${message}`, 'error');
+      } finally {
+        setConfigSwitchingKey(null);
+      }
+      return;
+    }
+
+    const previousList = provider === 'codex' ? codexConfigs : claudeConfigs;
+    const indexSet = new Set(normalized);
+    const nextList = previousList.map((item, idx) => {
+      if (!indexSet.has(idx)) return item;
+      return {
+        ...item,
+        excludedModels: enabled
+          ? withoutDisableAllModelsRule(item.excludedModels)
+          : withDisableAllModelsRule(item.excludedModels),
+      };
+    });
+
+    setConfigSwitchingKey(`${provider}:batch`);
+    if (provider === 'codex') {
+      setCodexConfigs(nextList);
+      updateConfigValue('codex-api-key', nextList);
+      clearCache('codex-api-key');
+    } else {
+      setClaudeConfigs(nextList);
+      updateConfigValue('claude-api-key', nextList);
+      clearCache('claude-api-key');
+    }
+
+    try {
+      if (provider === 'codex') {
+        await providersApi.saveCodexConfigs(nextList);
+      } else {
+        await providersApi.saveClaudeConfigs(nextList);
+      }
+      showNotification(
+        enabled ? t('notification.config_enabled') : t('notification.config_disabled'),
+        'success'
+      );
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      if (provider === 'codex') {
+        setCodexConfigs(previousList);
+        updateConfigValue('codex-api-key', previousList);
+        clearCache('codex-api-key');
+      } else {
+        setClaudeConfigs(previousList);
+        updateConfigValue('claude-api-key', previousList);
+        clearCache('claude-api-key');
+      }
+      showNotification(`${t('notification.update_failed')}: ${message}`, 'error');
+    } finally {
+      setConfigSwitchingKey(null);
+    }
+  };
+
   const deleteProviderEntry = async (type: 'codex' | 'claude', index: number) => {
     const source = type === 'codex' ? codexConfigs : claudeConfigs;
     const entry = source[index];
@@ -337,6 +436,140 @@ export function AiProvidersPage() {
     });
   };
 
+  const deleteGeminiBatch = (indices: number[]) => {
+    const normalized = normalizeIndices(indices);
+    if (!normalized.length) return;
+    const indexSet = new Set(normalized);
+    const next = geminiKeys.filter((_, idx) => !indexSet.has(idx));
+    const previous = geminiKeys;
+
+    showConfirmation({
+      title: t('ai_providers.bulk_delete_title'),
+      message: t('ai_providers.bulk_delete_confirm', { count: normalized.length }),
+      variant: 'danger',
+      confirmText: t('common.confirm'),
+      onConfirm: async () => {
+        try {
+          await providersApi.saveGeminiKeys(next);
+          setGeminiKeys(next);
+          updateConfigValue('gemini-api-key', next);
+          clearCache('gemini-api-key');
+          showNotification(t('ai_providers.bulk_delete_success', { count: normalized.length }), 'success');
+        } catch (err: unknown) {
+          const message = getErrorMessage(err);
+          setGeminiKeys(previous);
+          updateConfigValue('gemini-api-key', previous);
+          clearCache('gemini-api-key');
+          showNotification(`${t('notification.delete_failed')}: ${message}`, 'error');
+        }
+      },
+    });
+  };
+
+  const deleteProviderEntryBatch = (type: 'codex' | 'claude', indices: number[]) => {
+    const normalized = normalizeIndices(indices);
+    if (!normalized.length) return;
+    const source = type === 'codex' ? codexConfigs : claudeConfigs;
+    const indexSet = new Set(normalized);
+    const next = source.filter((_, idx) => !indexSet.has(idx));
+    const previous = source;
+
+    showConfirmation({
+      title: t('ai_providers.bulk_delete_title'),
+      message: t('ai_providers.bulk_delete_confirm', { count: normalized.length }),
+      variant: 'danger',
+      confirmText: t('common.confirm'),
+      onConfirm: async () => {
+        try {
+          if (type === 'codex') {
+            await providersApi.saveCodexConfigs(next);
+            setCodexConfigs(next);
+            updateConfigValue('codex-api-key', next);
+            clearCache('codex-api-key');
+          } else {
+            await providersApi.saveClaudeConfigs(next);
+            setClaudeConfigs(next);
+            updateConfigValue('claude-api-key', next);
+            clearCache('claude-api-key');
+          }
+          showNotification(t('ai_providers.bulk_delete_success', { count: normalized.length }), 'success');
+        } catch (err: unknown) {
+          const message = getErrorMessage(err);
+          if (type === 'codex') {
+            setCodexConfigs(previous);
+            updateConfigValue('codex-api-key', previous);
+            clearCache('codex-api-key');
+          } else {
+            setClaudeConfigs(previous);
+            updateConfigValue('claude-api-key', previous);
+            clearCache('claude-api-key');
+          }
+          showNotification(`${t('notification.delete_failed')}: ${message}`, 'error');
+        }
+      },
+    });
+  };
+
+  const deleteVertexBatch = (indices: number[]) => {
+    const normalized = normalizeIndices(indices);
+    if (!normalized.length) return;
+    const indexSet = new Set(normalized);
+    const next = vertexConfigs.filter((_, idx) => !indexSet.has(idx));
+    const previous = vertexConfigs;
+
+    showConfirmation({
+      title: t('ai_providers.bulk_delete_title'),
+      message: t('ai_providers.bulk_delete_confirm', { count: normalized.length }),
+      variant: 'danger',
+      confirmText: t('common.confirm'),
+      onConfirm: async () => {
+        try {
+          await providersApi.saveVertexConfigs(next);
+          setVertexConfigs(next);
+          updateConfigValue('vertex-api-key', next);
+          clearCache('vertex-api-key');
+          showNotification(t('ai_providers.bulk_delete_success', { count: normalized.length }), 'success');
+        } catch (err: unknown) {
+          const message = getErrorMessage(err);
+          setVertexConfigs(previous);
+          updateConfigValue('vertex-api-key', previous);
+          clearCache('vertex-api-key');
+          showNotification(`${t('notification.delete_failed')}: ${message}`, 'error');
+        }
+      },
+    });
+  };
+
+  const deleteOpenaiBatch = (indices: number[]) => {
+    const normalized = normalizeIndices(indices);
+    if (!normalized.length) return;
+    const indexSet = new Set(normalized);
+    const next = openaiProviders.filter((_, idx) => !indexSet.has(idx));
+    const previous = openaiProviders;
+
+    showConfirmation({
+      title: t('ai_providers.bulk_delete_title'),
+      message: t('ai_providers.bulk_delete_confirm', { count: normalized.length }),
+      variant: 'danger',
+      confirmText: t('common.confirm'),
+      onConfirm: async () => {
+        try {
+          await providersApi.saveOpenAIProviders(next);
+          setOpenaiProviders(next);
+          updateConfigValue('openai-compatibility', next);
+          clearCache('openai-compatibility');
+          showNotification(t('ai_providers.bulk_delete_success', { count: normalized.length }), 'success');
+        } catch (err: unknown) {
+          const message = getErrorMessage(err);
+          setOpenaiProviders(previous);
+          updateConfigValue('openai-compatibility', previous);
+          clearCache('openai-compatibility');
+          showNotification(`${t('notification.delete_failed')}: ${message}`, 'error');
+        }
+      },
+    });
+  };
+
   return (
     <div className={styles.container}>
       <h1 className={styles.pageTitle}>{t('ai_providers.title')}</h1>
@@ -355,6 +588,8 @@ export function AiProvidersPage() {
             onEdit={(index) => openEditor(`/ai-providers/gemini/${index}`)}
             onDelete={deleteGemini}
             onToggle={(index, enabled) => void setConfigEnabled('gemini', index, enabled)}
+            onBulkDelete={deleteGeminiBatch}
+            onBulkToggle={(indices, enabled) => void setConfigEnabledBatch('gemini', indices, enabled)}
           />
         </div>
 
@@ -371,6 +606,8 @@ export function AiProvidersPage() {
             onEdit={(index) => openEditor(`/ai-providers/codex/${index}`)}
             onDelete={(index) => void deleteProviderEntry('codex', index)}
             onToggle={(index, enabled) => void setConfigEnabled('codex', index, enabled)}
+            onBulkDelete={(indices) => deleteProviderEntryBatch('codex', indices)}
+            onBulkToggle={(indices, enabled) => void setConfigEnabledBatch('codex', indices, enabled)}
           />
         </div>
 
@@ -386,6 +623,8 @@ export function AiProvidersPage() {
             onEdit={(index) => openEditor(`/ai-providers/claude/${index}`)}
             onDelete={(index) => void deleteProviderEntry('claude', index)}
             onToggle={(index, enabled) => void setConfigEnabled('claude', index, enabled)}
+            onBulkDelete={(indices) => deleteProviderEntryBatch('claude', indices)}
+            onBulkToggle={(indices, enabled) => void setConfigEnabledBatch('claude', indices, enabled)}
           />
         </div>
 
@@ -400,6 +639,7 @@ export function AiProvidersPage() {
             onAdd={() => openEditor('/ai-providers/vertex/new')}
             onEdit={(index) => openEditor(`/ai-providers/vertex/${index}`)}
             onDelete={deleteVertex}
+            onBulkDelete={deleteVertexBatch}
           />
         </div>
 
@@ -425,6 +665,7 @@ export function AiProvidersPage() {
             onAdd={() => openEditor('/ai-providers/openai/new')}
             onEdit={(index) => openEditor(`/ai-providers/openai/${index}`)}
             onDelete={deleteOpenai}
+            onBulkDelete={deleteOpenaiBatch}
           />
         </div>
       </div>

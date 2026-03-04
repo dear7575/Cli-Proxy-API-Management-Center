@@ -3,15 +3,14 @@ import { useNavigate, useOutletContext } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
 import { SecondaryScreenShell } from '@/components/common/SecondaryScreenShell';
+import { ModelDiscoveryPanel } from '@/components/providers/ModelDiscoveryPanel';
 import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
 import { modelsApi } from '@/services/api';
 import type { ModelInfo } from '@/utils/models';
 import { buildHeaderObject } from '@/utils/headers';
 import { buildOpenAIModelsEndpoint } from '@/components/providers/utils';
 import type { OpenAIEditOutletContext } from './AiProvidersOpenAIEditLayout';
-import styles from './AiProvidersPage.module.scss';
 import layoutStyles from './AiProvidersEditLayout.module.scss';
 
 const getErrorMessage = (err: unknown) => {
@@ -135,6 +134,25 @@ export function AiProvidersOpenAIModelsPage() {
   };
 
   const canApply = !disableControls && !saving && !fetching;
+  const selectedCount = selected.size;
+
+  const handleSelectAllFiltered = () => {
+    if (!filteredModels.length) return;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      filteredModels.forEach((model) => {
+        if (model.name) {
+          next.add(model.name);
+        }
+      });
+      return next;
+    });
+  };
+
+  const handleClearSelected = () => {
+    if (!selectedCount) return;
+    setSelected(new Set());
+  };
 
   return (
     <SecondaryScreenShell
@@ -169,77 +187,37 @@ export function AiProvidersOpenAIModelsPage() {
       isLoading={initialLoading}
       loadingLabel={t('common.loading')}
     >
-      <Card>
-        <div className={styles.openaiModelsContent}>
-          <div className={styles.sectionHint}>{t('ai_providers.openai_models_fetch_hint')}</div>
-          <div className={styles.openaiModelsEndpointSection}>
-            <label className={styles.openaiModelsEndpointLabel}>
-              {t('ai_providers.openai_models_fetch_url_label')}
-            </label>
-            <div className={styles.openaiModelsEndpointControls}>
-              <input
-                className={`input ${styles.openaiModelsEndpointInput}`}
-                readOnly
-                value={endpoint}
-              />
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => void fetchOpenaiModelDiscovery({ allowFallback: true })}
-                loading={fetching}
-                disabled={disableControls || saving}
-              >
-                {t('ai_providers.openai_models_fetch_refresh')}
-              </Button>
-            </div>
-          </div>
-          <Input
-            label={t('ai_providers.openai_models_search_label')}
-            placeholder={t('ai_providers.openai_models_search_placeholder')}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            disabled={fetching}
-          />
-          {error && <div className="error-box">{error}</div>}
-          {fetching ? (
-            <div className={styles.sectionHint}>{t('ai_providers.openai_models_fetch_loading')}</div>
-          ) : models.length === 0 ? (
-            <div className={styles.sectionHint}>{t('ai_providers.openai_models_fetch_empty')}</div>
-          ) : filteredModels.length === 0 ? (
-            <div className={styles.sectionHint}>{t('ai_providers.openai_models_search_empty')}</div>
-          ) : (
-            <div className={styles.modelDiscoveryList}>
-              {filteredModels.map((model) => {
-                const checked = selected.has(model.name);
-                return (
-                  <label
-                    key={model.name}
-                    className={`${styles.modelDiscoveryRow} ${
-                      checked ? styles.modelDiscoveryRowSelected : ''
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleSelection(model.name)}
-                    />
-                    <div className={styles.modelDiscoveryMeta}>
-                      <div className={styles.modelDiscoveryName}>
-                        {model.name}
-                        {model.alias && (
-                          <span className={styles.modelDiscoveryAlias}>{model.alias}</span>
-                        )}
-                      </div>
-                      {model.description && (
-                        <div className={styles.modelDiscoveryDesc}>{model.description}</div>
-                      )}
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-          )}
-        </div>
+      <Card className={layoutStyles.formCard}>
+        <ModelDiscoveryPanel
+          hintText={t('ai_providers.openai_models_fetch_hint')}
+          endpointLabel={t('ai_providers.openai_models_fetch_url_label')}
+          endpointValue={endpoint}
+          refreshLabel={t('ai_providers.openai_models_fetch_refresh')}
+          onRefresh={() => void fetchOpenaiModelDiscovery({ allowFallback: true })}
+          refreshLoading={fetching}
+          refreshDisabled={disableControls || saving}
+          searchLabel={t('ai_providers.openai_models_search_label')}
+          searchPlaceholder={t('ai_providers.openai_models_search_placeholder')}
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchDisabled={fetching}
+          selectedText={t('auth_files.batch_selected', { count: selectedCount })}
+          selectAllLabel={t('auth_files.batch_select_all')}
+          clearSelectedLabel={t('auth_files.batch_deselect')}
+          onSelectAll={handleSelectAllFiltered}
+          onClearSelected={handleClearSelected}
+          selectAllDisabled={fetching || filteredModels.length === 0}
+          clearSelectedDisabled={fetching || selectedCount === 0}
+          error={error}
+          loading={fetching}
+          loadingText={t('ai_providers.openai_models_fetch_loading')}
+          emptyText={t('ai_providers.openai_models_fetch_empty')}
+          searchEmptyText={t('ai_providers.openai_models_search_empty')}
+          models={models}
+          filteredModels={filteredModels}
+          selectedNames={selected}
+          onToggleModel={toggleSelection}
+        />
       </Card>
     </SecondaryScreenShell>
   );

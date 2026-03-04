@@ -3,6 +3,9 @@
 
 .container {
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-lg;
 }
 
 .cardTitle {
@@ -17,19 +20,61 @@
 }
 
 .pageTitle {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0 0 $spacing-xl 0;
+  font-size: clamp(26px, 2.7vw, 32px);
+  font-weight: 800;
+  color: color-mix(in srgb, var(--text-primary) 88%, var(--primary-color) 12%);
+  letter-spacing: -0.02em;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
+  border-radius: $radius-lg;
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--primary-color) 8%, var(--bg-primary)) 0%,
+      color-mix(in srgb, var(--bg-primary) 96%, transparent) 56%
+    );
+  box-shadow: 0 12px 24px -24px rgba(2, 6, 23, 0.68);
 }
 
 .content {
   display: flex;
   flex-direction: column;
   gap: $spacing-xl;
+  margin-top: 2px;
   padding-bottom: calc(
     var(--provider-nav-height, 60px) + 12px + env(safe-area-inset-bottom) + #{$spacing-md}
   );
+}
+
+.content > * {
+  animation: section-rise-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.content > *:nth-child(1) { animation-delay: 0ms; }
+.content > *:nth-child(2) { animation-delay: 36ms; }
+.content > *:nth-child(3) { animation-delay: 72ms; }
+.content > *:nth-child(4) { animation-delay: 108ms; }
+.content > *:nth-child(5) { animation-delay: 144ms; }
+.content > *:nth-child(6) { animation-delay: 180ms; }
+.content > *:nth-child(7) { animation-delay: 216ms; }
+
+@keyframes section-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content > * {
+    animation: none;
+  }
 }
 
 .section {
@@ -47,7 +92,7 @@
   h3 {
     margin: 0;
     font-size: 20px;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--text-primary);
   }
 }
@@ -104,16 +149,79 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: 6px;
-  margin-bottom: 4px;
-  font-size: 13px;
+  margin-bottom: 3px;
+  font-size: 12px;
   line-height: 1.4;
+}
+
+.fieldRowOffsetTop {
+  margin-top: 8px;
+}
+
+.statusBadgeInline {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.providerEntryLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: 12px;
+  align-items: start;
+  width: 100%;
+}
+
+.providerEntryMain {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.providerEntryMetrics {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
+  border-radius: $radius-md;
+  background: color-mix(in srgb, var(--bg-secondary) 75%, transparent);
+}
+
+.providerEntryMetrics .cardStats {
+  display: flex;
+  gap: 8px;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.providerEntryMetrics .statusBar {
+  max-width: none;
+  width: 100%;
+  margin-top: 2px;
+  padding: 4px 0 0;
+}
+
+@include mobile {
+  .providerEntryLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .providerEntryMetrics {
+    padding: 0;
+    border: none;
+    border-top: 1px dashed color-mix(in srgb, var(--border-color) 82%, transparent);
+    border-radius: 0;
+    background: transparent;
+    padding-top: 8px;
+  }
 }
 
 .fieldLabel {
   color: var(--text-tertiary);
   font-weight: 500;
   white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .fieldValue {
@@ -323,17 +431,21 @@
   max-height: 360px;
   overflow-y: auto;
   margin-top: 0;
-  padding-right: 4px;
+  padding: 10px;
+  border-radius: $radius-md;
+  border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
+  background: color-mix(in srgb, var(--bg-primary) 96%, var(--bg-secondary) 4%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-color) 25%, transparent);
 }
 
 .modelDiscoveryRow {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 8px 10px;
-  border: 1px solid var(--border-color);
+  padding: 10px 11px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
   border-radius: 8px;
-  background: var(--bg-primary);
+  background: color-mix(in srgb, var(--bg-primary) 96%, var(--bg-tertiary) 4%);
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease;
 
@@ -344,19 +456,19 @@
 
   &:hover {
     border-color: var(--primary-color);
-    background: var(--bg-secondary);
+    background: color-mix(in srgb, var(--bg-secondary) 90%, var(--primary-color) 10%);
   }
 }
 
 .modelDiscoveryRowSelected {
   border-color: var(--primary-color);
-  background: var(--bg-tertiary);
+  background: color-mix(in srgb, var(--bg-secondary) 86%, var(--primary-color) 14%);
 }
 
 .modelDiscoveryMeta {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .modelDiscoveryName {
@@ -373,7 +485,43 @@
 .modelDiscoveryDesc {
   font-size: 12px;
   color: var(--text-secondary);
-  line-height: 1.4;
+  line-height: 1.45;
+}
+
+.modelDiscoveryActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+  padding: 10px 12px;
+  border-radius: $radius-md;
+  border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
+  background: color-mix(in srgb, var(--bg-primary) 94%, var(--bg-secondary) 6%);
+}
+
+.modelDiscoverySelected {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.modelDiscoveryActionButtons {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.modelDiscoveryState {
+  margin: 0;
+  padding: 12px;
+  border-radius: $radius-md;
+  border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
+  background: color-mix(in srgb, var(--bg-primary) 94%, var(--bg-secondary) 6%);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .openaiTestButtonSuccess {
@@ -391,10 +539,16 @@
 .statusBar {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 8px;
-  margin-top: 8px;
-  padding: 8px 0;
-  max-width: 280px;
+  margin-top: 0;
+  padding: 0;
+  width: 100%;
+  max-width: none;
+}
+
+:global(.provider-table-cell-status) .statusBar {
+  justify-content: center;
 }
 
 .statusBlocks {
@@ -580,6 +734,32 @@
   }
 }
 
+.openaiEditForm > * {
+  animation: provider-form-item-rise 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.openaiEditForm > *:nth-child(1) { animation-delay: 0ms; }
+.openaiEditForm > *:nth-child(2) { animation-delay: 20ms; }
+.openaiEditForm > *:nth-child(3) { animation-delay: 40ms; }
+.openaiEditForm > *:nth-child(4) { animation-delay: 60ms; }
+.openaiEditForm > *:nth-child(5) { animation-delay: 80ms; }
+.openaiEditForm > *:nth-child(6) { animation-delay: 100ms; }
+.openaiEditForm > *:nth-child(7) { animation-delay: 120ms; }
+.openaiEditForm > *:nth-child(8) { animation-delay: 140ms; }
+.openaiEditForm > *:nth-child(9) { animation-delay: 160ms; }
+
+@keyframes provider-form-item-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .sectionHint {
   margin: 0;
   font-size: 13px;
@@ -591,6 +771,7 @@
   display: flex;
   flex-direction: column;
   gap: $spacing-md;
+  padding: 2px;
 
   :global(.form-group) {
     margin-bottom: 0;
@@ -601,6 +782,10 @@
   display: flex;
   flex-direction: column;
   gap: $spacing-xs;
+  padding: 12px;
+  border-radius: $radius-md;
+  border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
+  background: color-mix(in srgb, var(--bg-primary) 94%, var(--bg-secondary) 6%);
 }
 
 .openaiModelsEndpointLabel {
@@ -626,11 +811,43 @@
   min-width: 0;
 }
 
+.modelDiscoveryModal {
+  background: color-mix(in srgb, var(--bg-primary) 96%, var(--bg-secondary) 4%);
+  border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
+  box-shadow: 0 20px 45px -30px rgba(2, 6, 23, 0.55);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+
+  :global(.modal-header) {
+    background: color-mix(in srgb, var(--bg-primary) 92%, var(--bg-secondary) 8%);
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
+  }
+
+  :global(.modal-body) {
+    background: color-mix(in srgb, var(--bg-primary) 96%, var(--bg-secondary) 4%);
+  }
+
+  :global(.modal-footer) {
+    background: color-mix(in srgb, var(--bg-primary) 92%, var(--bg-secondary) 8%);
+    border-top: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
+  }
+}
+
 .modelConfigSection {
   margin-bottom: $spacing-md;
   display: flex;
   flex-direction: column;
   gap: $spacing-sm;
+  padding: 12px;
+  border-radius: $radius-md;
+  border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
+  background:
+    linear-gradient(
+      150deg,
+      color-mix(in srgb, var(--bg-secondary) 88%, transparent) 0%,
+      color-mix(in srgb, var(--bg-primary) 95%, transparent) 74%
+    );
+  box-shadow: 0 10px 20px -22px rgba(2, 6, 23, 0.6);
 }
 
 .modelConfigHeader {
@@ -713,9 +930,14 @@
   gap: $spacing-md;
   margin-top: 0;
   padding: $spacing-sm $spacing-md;
-  border: 1px solid var(--border-color);
+  border: 1px solid color-mix(in srgb, var(--border-color) 85%, transparent);
   border-radius: $radius-md;
-  background: var(--bg-secondary);
+  background:
+    linear-gradient(
+      165deg,
+      color-mix(in srgb, var(--bg-secondary) 84%, transparent) 0%,
+      color-mix(in srgb, var(--bg-primary) 96%, transparent) 74%
+    );
 
   @include mobile {
     flex-direction: column;
@@ -938,6 +1160,12 @@
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .openaiEditForm > * {
+    animation: none;
   }
 }
 

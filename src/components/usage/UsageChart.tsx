@@ -29,6 +29,10 @@ export function UsageChart({
   emptyText
 }: UsageChartProps) {
   const { t } = useTranslation();
+  const chartCanvasStyle =
+    period === 'hour'
+      ? { minWidth: getHourChartMinWidth(chartData.labels.length, isMobile) }
+      : undefined;
 
   return (
     <Card
@@ -57,27 +61,23 @@ export function UsageChart({
       ) : chartData.labels.length > 0 ? (
         <div className={styles.chartWrapper}>
           <div className={styles.chartLegend} aria-label="Chart legend">
-            {chartData.datasets.map((dataset, index) => (
-              <div
-                key={`${dataset.label}-${index}`}
-                className={styles.legendItem}
-                title={dataset.label}
-              >
-                <span className={styles.legendDot} style={{ backgroundColor: dataset.borderColor }} />
-                <span className={styles.legendLabel}>{dataset.label}</span>
-              </div>
-            ))}
+            {chartData.datasets.map((dataset, index) => {
+              const legendDotStyle = { backgroundColor: dataset.borderColor };
+              return (
+                <div
+                  key={`${dataset.label}-${index}`}
+                  className={styles.legendItem}
+                  title={dataset.label}
+                >
+                  <span className={styles.legendDot} style={legendDotStyle} />
+                  <span className={styles.legendLabel}>{dataset.label}</span>
+                </div>
+              );
+            })}
           </div>
           <div className={styles.chartArea}>
             <div className={styles.chartScroller}>
-              <div
-                className={styles.chartCanvas}
-                style={
-                  period === 'hour'
-                    ? { minWidth: getHourChartMinWidth(chartData.labels.length, isMobile) }
-                    : undefined
-                }
-              >
+              <div className={styles.chartCanvas} style={chartCanvasStyle}>
                 <Line data={chartData} options={chartOptions} />
               </div>
             </div>

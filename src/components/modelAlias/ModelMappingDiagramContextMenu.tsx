@@ -45,6 +45,7 @@ export function DiagramContextMenu({
   if (!contextMenu) return null;
 
   const { type, data } = contextMenu;
+  const contextMenuStyle = { top: contextMenu.y, left: contextMenu.x };
 
   const renderBackground = () => (
     <div className={styles.menuItem} onClick={onAddAlias}>
@@ -98,7 +99,7 @@ export function DiagramContextMenu({
     <div
       ref={menuRef}
       className={styles.contextMenu}
-      style={{ top: contextMenu.y, left: contextMenu.x }}
+      style={contextMenuStyle}
       onClick={(e) => e.stopPropagation()}
     >
       {type === 'background' && renderBackground()}

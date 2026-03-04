@@ -7,6 +7,8 @@ import type { ReactElement, ReactNode } from 'react';
 import type { TFunction } from 'i18next';
 import type { AuthFileItem, ResolvedTheme, ThemeColors } from '@/types';
 import { TYPE_COLORS } from '@/utils/quota';
+import { formatFileSize } from '@/utils/format';
+import { formatModified } from '@/features/authFiles/constants';
 import styles from '@/pages/QuotaPage.module.scss';
 
 type QuotaStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -40,13 +42,11 @@ export function QuotaProgressBar({
           ? styles.quotaBarFillMedium
           : styles.quotaBarFillLow;
   const widthPercent = Math.round(normalized ?? 0);
+  const fillStyle = { width: `${widthPercent}%` };
 
   return (
     <div className={styles.quotaBar}>
-      <div
-        className={`${styles.quotaBarFill} ${fillClass}`}
-        style={{ width: `${widthPercent}%` }}
-      />
+      <div className={`${styles.quotaBarFill} ${fillClass}`} style={fillStyle} />
     </div>
   );
 }
@@ -83,6 +83,11 @@ export function QuotaCard<TState extends QuotaStatusState>({
   const typeColorSet = TYPE_COLORS[displayType] || TYPE_COLORS.unknown;
   const typeColor: ThemeColors =
     resolvedTheme === 'dark' && typeColorSet.dark ? typeColorSet.dark : typeColorSet.light;
+  const typeBadgeStyle = {
+    backgroundColor: typeColor.bg,
+    color: typeColor.text,
+    ...(typeColor.border ? { border: typeColor.border } : {}),
+  };
 
   const quotaStatus = quota?.status ?? 'idle';
   const quotaErrorMessage = resolveQuotaErrorMessage(
@@ -105,15 +110,19 @@ export function QuotaCard<TState extends QuotaStatusState>({
       <div className={styles.cardHeader}>
         <span
           className={styles.typeBadge}
-          style={{
-            backgroundColor: typeColor.bg,
-            color: typeColor.text,
-            ...(typeColor.border ? { border: typeColor.border } : {})
-          }}
+          style={typeBadgeStyle}
         >
           {getTypeLabel(displayType)}
         </span>
-        <span className={styles.fileName}>{item.name}</span>
+        <span className={styles.fileName} title={item.name}>{item.name}</span>
+      </div>
+      <div className={styles.cardMeta}>
+        <span>
+          {t('auth_files.file_size')}: {item.size ? formatFileSize(item.size) : '-'}
+        </span>
+        <span>
+          {t('auth_files.file_modified')}: {formatModified(item)}
+        </span>
       </div>
 
       <div className={styles.quotaSection}>

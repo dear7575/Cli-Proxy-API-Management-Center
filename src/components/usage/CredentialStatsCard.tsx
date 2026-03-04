@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import {
   collectUsageDetails,
@@ -12,6 +13,7 @@ import type { GeminiKeyConfig, ProviderKeyConfig, OpenAIProviderConfig } from '@
 import type { AuthFileItem } from '@/types/authFile';
 import type { CredentialInfo } from '@/types/sourceInfo';
 import type { UsagePayload } from './hooks/useUsageData';
+import { UsageTablePagination } from './UsageTablePagination';
 import styles from '@/pages/UsagePage.module.scss';
 
 export interface CredentialStatsCardProps {
@@ -39,6 +41,9 @@ interface CredentialBucket {
   failure: number;
 }
 
+type CredentialSortKey = 'displayName' | 'total' | 'successRate';
+type SortDir = 'asc' | 'desc';
+
 export function CredentialStatsCard({
   usage,
   loading,
@@ -50,6 +55,11 @@ export function CredentialStatsCard({
 }: CredentialStatsCardProps) {
   const { t } = useTranslation();
   const [authFileMap, setAuthFileMap] = useState<Map<string, CredentialInfo>>(new Map());
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [sortKey, setSortKey] = useState<CredentialSortKey>('total');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Fetch auth files for auth_index-based matching
   useEffect(() => {
@@ -268,59 +278,203 @@ export function CredentialStatsCard({
 
     return result.sort((a, b) => b.total - a.total);
   }, [usage, geminiKeys, claudeConfigs, codexConfigs, vertexConfigs, openaiProviders, authFileMap]);
+  const normalizedSearchKeyword = searchKeyword.trim().toLowerCase();
+  const filteredRows = useMemo(
+    () =>
+      rows.filter((row) => {
+        if (!normalizedSearchKeyword) return true;
+        return (
+          row.displayName.toLowerCase().includes(normalizedSearchKeyword) ||
+          row.type.toLowerCase().includes(normalizedSearchKeyword) ||
+          row.key.toLowerCase().includes(normalizedSearchKeyword)
+        );
+      }),
+    [normalizedSearchKeyword, rows]
+  );
+  const sortedRows = useMemo(() => {
+    const list = [...filteredRows];
+    const dir = sortDir === 'asc' ? 1 : -1;
+    list.sort((a, b) => {
+      switch (sortKey) {
+        case 'displayName':
+          return dir * a.displayName.localeCompare(b.displayName);
+        case 'total':
+          return dir * (a.total - b.total);
+        case 'successRate':
+          return dir * (a.successRate - b.successRate);
+        default:
+          return 0;
+      }
+    });
+    return list;
+  }, [filteredRows, sortDir, sortKey]);
+
+  const handleSort = (key: CredentialSortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir(key === 'displayName' ? 'asc' : 'desc');
+    }
+  };
+
+  const arrow = (key: CredentialSortKey) =>
+    sortKey === key ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+  const ariaSort = (key: CredentialSortKey): 'none' | 'ascending' | 'descending' =>
+    sortKey === key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none';
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageItems = sortedRows.slice(pageStart, pageStart + pageSize);
+  const shouldEnableTableScroll = pageItems.length > 10;
+  const hasActiveSearch = normalizedSearchKeyword.length > 0;
+
+  useEffect(() => {
+    if (page <= totalPages) return;
+    setPage(totalPages);
+  }, [page, totalPages]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [rows.length, normalizedSearchKeyword, sortKey, sortDir]);
+
+  const handlePageSizeChange = (size: number) => {
+    if (!Number.isFinite(size) || size < 1) return;
+    setPageSize(Math.floor(size));
+    setPage(1);
+  };
+
+  const handleClearSearch = () => {
+    setSearchKeyword('');
+  };
 
   return (
-    <Card title={t('usage_stats.credential_stats')} className={styles.detailsFixedCard}>
+    <Card title={t('usage_stats.credential_stats')}>
       {loading ? (
         <div className={styles.hint}>{t('common.loading')}</div>
       ) : rows.length > 0 ? (
-        <div className={styles.detailsScroll}>
-        <div className={styles.tableWrapper}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>{t('usage_stats.credential_name')}</th>
-                <th>{t('usage_stats.requests_count')}</th>
-                <th>{t('usage_stats.success_rate')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.key}>
-                  <td className={styles.modelCell}>
-                    <span>{row.displayName}</span>
-                    {row.type && (
-                      <span className={styles.credentialType}>{row.type}</span>
-                    )}
-                  </td>
-                  <td>
-                    <span className={styles.requestCountCell}>
-                      <span>{formatCompactNumber(row.total)}</span>
-                      <span className={styles.requestBreakdown}>
-                        (<span className={styles.statSuccess}>{row.success.toLocaleString()}</span>{' '}
-                        <span className={styles.statFailure}>{row.failure.toLocaleString()}</span>)
-                      </span>
-                    </span>
-                  </td>
-                  <td>
-                    <span
-                      className={
-                        row.successRate >= 95
-                          ? styles.statSuccess
-                          : row.successRate >= 80
-                            ? styles.statNeutral
-                            : styles.statFailure
-                      }
-                    >
-                      {row.successRate.toFixed(1)}%
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        </div>
+        <>
+          <div className={styles.requestEventsTopBar}>
+            <div className={styles.requestEventsToolbar}>
+              <div className={`${styles.requestEventsFilterItem} ${styles.requestEventsSearchItem} ${styles.credentialStatsSearchItem}`}>
+                <input
+                  className={`input ${styles.requestEventsSearchInput}`}
+                  value={searchKeyword}
+                  onChange={(event) => setSearchKeyword(event.target.value)}
+                  placeholder={t('usage_stats.credential_search_placeholder', {
+                    defaultValue: '搜索凭证 / 类型'
+                  })}
+                  aria-label={t('usage_stats.credential_search_placeholder', {
+                    defaultValue: '搜索凭证 / 类型'
+                  })}
+                />
+              </div>
+            </div>
+            <div className={`${styles.requestEventsActions} ${styles.credentialStatsActions}`}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearSearch}
+                disabled={!hasActiveSearch}
+              >
+                {t('usage_stats.clear_filters')}
+              </Button>
+            </div>
+          </div>
+          {filteredRows.length === 0 ? (
+            <div className={styles.hint}>
+              {t('ai_providers.list_no_match_title', { defaultValue: '没有匹配结果' })}
+            </div>
+          ) : (
+            <>
+              <div
+                className={`${styles.tableWrapper} ${styles.credentialStatsTableWrapper} ${shouldEnableTableScroll ? styles.credentialStatsTableWrapperScrollable : ''}`.trim()}
+              >
+                <table className={`${styles.table} ${styles.credentialStatsTable}`}>
+                  <colgroup>
+                    <col className={styles.credentialStatsColName} />
+                    <col className={styles.credentialStatsColRequests} />
+                    <col className={styles.credentialStatsColRate} />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th className={styles.sortableHeader} aria-sort={ariaSort('displayName')}>
+                        <button
+                          type="button"
+                          className={styles.sortHeaderButton}
+                          onClick={() => handleSort('displayName')}
+                        >
+                          {t('usage_stats.credential_name')}{arrow('displayName')}
+                        </button>
+                      </th>
+                      <th className={styles.sortableHeader} aria-sort={ariaSort('total')}>
+                        <button
+                          type="button"
+                          className={styles.sortHeaderButton}
+                          onClick={() => handleSort('total')}
+                        >
+                          {t('usage_stats.requests_count')}{arrow('total')}
+                        </button>
+                      </th>
+                      <th className={styles.sortableHeader} aria-sort={ariaSort('successRate')}>
+                        <button
+                          type="button"
+                          className={styles.sortHeaderButton}
+                          onClick={() => handleSort('successRate')}
+                        >
+                          {t('usage_stats.success_rate')}{arrow('successRate')}
+                        </button>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pageItems.map((row) => (
+                      <tr key={row.key}>
+                        <td className={`${styles.modelCell} ${styles.tableCellLeft}`} title={row.displayName}>
+                          <span className={styles.truncateText}>{row.displayName}</span>
+                          {row.type && (
+                            <span className={styles.credentialType}>{row.type}</span>
+                          )}
+                        </td>
+                        <td className={styles.tableCellMono}>
+                          <span className={styles.requestCountCell}>
+                            <span>{formatCompactNumber(row.total)}</span>
+                            <span className={styles.requestBreakdown}>
+                              (<span className={styles.statSuccess}>{row.success.toLocaleString()}</span>{' '}
+                              <span className={styles.statFailure}>{row.failure.toLocaleString()}</span>)
+                            </span>
+                          </span>
+                        </td>
+                        <td className={styles.tableCellMono}>
+                          <span
+                            className={
+                              row.successRate >= 95
+                                ? styles.statSuccess
+                                : row.successRate >= 80
+                                  ? styles.statNeutral
+                                  : styles.statFailure
+                            }
+                          >
+                            {row.successRate.toFixed(1)}%
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className={styles.usageTablePagination}>
+                <UsageTablePagination
+                  totalItems={sortedRows.length}
+                  currentPage={currentPage}
+                  pageSize={pageSize}
+                  onPageChange={setPage}
+                  onPageSizeChange={handlePageSizeChange}
+                />
+              </div>
+            </>
+          )}
+        </>
       ) : (
         <div className={styles.hint}>{t('usage_stats.no_data')}</div>
       )}

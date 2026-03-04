@@ -6,7 +6,7 @@ export function PlaceholderPage({ titleKey }: { titleKey: string }) {
 
   return (
     <Card title={t(titleKey)}>
-      <p style={{ color: 'var(--text-secondary)' }}>{t('common.loading')}</p>
+      <p className="hint">{t('common.loading')}</p>
     </Card>
   );
 }

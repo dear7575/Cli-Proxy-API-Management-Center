@@ -5,6 +5,7 @@
 
 import type { ScriptableContext } from 'chart.js';
 import { maskApiKey } from './format';
+import { USAGE_MODEL_CHART_COLORS } from './usage/palette';
 
 export interface KeyStatBucket {
   success: number;
@@ -1115,17 +1116,7 @@ export interface ChartData {
   datasets: ChartDataset[];
 }
 
-const CHART_COLORS = [
-  { borderColor: '#8b8680', backgroundColor: 'rgba(139, 134, 128, 0.15)' },
-  { borderColor: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.15)' },
-  { borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.15)' },
-  { borderColor: '#c65746', backgroundColor: 'rgba(198, 87, 70, 0.15)' },
-  { borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.15)' },
-  { borderColor: '#06b6d4', backgroundColor: 'rgba(6, 182, 212, 0.15)' },
-  { borderColor: '#ec4899', backgroundColor: 'rgba(236, 72, 153, 0.15)' },
-  { borderColor: '#84cc16', backgroundColor: 'rgba(132, 204, 22, 0.15)' },
-  { borderColor: '#f97316', backgroundColor: 'rgba(249, 115, 22, 0.15)' },
-];
+const CHART_COLORS = USAGE_MODEL_CHART_COLORS;
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 

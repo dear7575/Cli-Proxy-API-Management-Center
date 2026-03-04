@@ -82,6 +82,11 @@ export function AuthFileCard(props: AuthFileCardProps) {
   const isAistudio = (file.type || '').toLowerCase() === 'aistudio';
   const showModelsButton = !isRuntimeOnly || isAistudio;
   const typeColor = getTypeColor(file.type || 'unknown', resolvedTheme);
+  const typeBadgeStyle = {
+    backgroundColor: typeColor.bg,
+    color: typeColor.text,
+    ...(typeColor.border ? { border: typeColor.border } : {}),
+  };
 
   const quotaType =
     quotaFilterType && resolveQuotaType(file) === quotaFilterType ? quotaFilterType : null;
@@ -130,11 +135,7 @@ export function AuthFileCard(props: AuthFileCardProps) {
             )}
             <span
               className={styles.typeBadge}
-              style={{
-                backgroundColor: typeColor.bg,
-                color: typeColor.text,
-                ...(typeColor.border ? { border: typeColor.border } : {}),
-              }}
+              style={typeBadgeStyle}
             >
               {getTypeLabel(t, file.type || 'unknown')}
             </span>

@@ -5,20 +5,29 @@
   display: flex;
   flex-direction: column;
   gap: $spacing-lg;
-  max-width: 1000px;
-  margin: 0 auto;
+  width: 100%;
 }
 
 .header {
-  margin-bottom: $spacing-sm;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
+  border-radius: $radius-lg;
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--primary-color) 8%, var(--bg-primary)) 0%,
+      color-mix(in srgb, var(--bg-primary) 96%, transparent) 56%
+    );
+  box-shadow: 0 12px 24px -24px rgba(2, 6, 23, 0.68);
 }
 
 .title {
-  font-size: 26px;
+  font-size: clamp(26px, 2.7vw, 32px);
   font-weight: 800;
-  color: var(--text-primary);
+  color: color-mix(in srgb, var(--text-primary) 88%, var(--primary-color) 12%);
   margin: 0;
-  line-height: 1.4;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
 }
 
 .subtitle {
@@ -27,97 +36,21 @@
   margin: $spacing-xs 0 0 0;
 }
 
-.connectionCard {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: $spacing-md;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: $radius-lg;
-  padding: $spacing-md $spacing-lg;
-  flex-wrap: wrap;
-}
-
-.connectionStatus {
-  display: flex;
-  align-items: center;
-  gap: $spacing-sm;
-}
-
-.statusDot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: $gray-400;
-
-  &.connected {
-    background: $success-color;
-    box-shadow: 0 0 8px rgba($success-color, 0.5);
-  }
-
-  &.connecting {
-    background: $warning-color;
-    animation: pulse 1s ease-in-out infinite;
-  }
-
-  &.disconnected {
-    background: $error-color;
-  }
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
-
-.statusText {
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.connectionInfo {
-  display: flex;
-  align-items: center;
-  gap: $spacing-md;
-  flex-wrap: wrap;
-}
-
-.serverUrl {
-  font-family: $font-mono;
-  font-size: 13px;
-  color: var(--text-secondary);
-  background: var(--bg-primary);
-  padding: 4px 10px;
-  border-radius: $radius-md;
-  border: 1px solid var(--border-color);
-}
-
-.serverVersion {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--primary-color);
-  background: rgba($primary-color, 0.1);
-  padding: 4px 10px;
-  border-radius: $radius-full;
-}
-
-.buildDate {
-  font-size: 12px;
-  color: var(--text-secondary);
+.sectionCard {
+  overflow: hidden;
 }
 
 .statsGrid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: $spacing-md;
 
+  @media (max-width: 1180px) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   @media (max-width: 900px) {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   @media (max-width: 500px) {
@@ -129,17 +62,20 @@
   display: flex;
   align-items: center;
   gap: $spacing-md;
-  padding: $spacing-lg;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: $radius-lg;
+  padding: 14px;
+  background: color-mix(in srgb, var(--bg-secondary) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 86%, transparent);
+  border-radius: $radius-md;
   text-decoration: none;
-  transition: all $transition-fast;
+  transition:
+    border-color $transition-fast,
+    box-shadow $transition-fast,
+    transform $transition-fast;
 
   &:hover {
-    border-color: var(--primary-color);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--primary-color) 42%, transparent);
+    box-shadow: 0 12px 18px -18px rgba(2, 6, 23, 0.72);
+    transform: translateY(-1px);
   }
 }
 
@@ -178,17 +114,29 @@
   margin-top: 2px;
 }
 
-.section {
-  display: flex;
-  flex-direction: column;
-  gap: $spacing-md;
+.connectionStatCard {
+  cursor: default;
 }
 
-.sectionTitle {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0;
+.connectionStatIcon {
+  color: color-mix(in srgb, var(--primary-color) 72%, var(--text-primary));
+}
+
+.connectionValueConnected {
+  color: $success-color;
+}
+
+.connectionValueConnecting {
+  color: $warning-color;
+}
+
+.connectionValueDisconnected {
+  color: $error-color;
+}
+
+.connectionStatMeta {
+  font-family: $font-mono;
+  word-break: break-all;
 }
 
 .actionsGrid {
@@ -301,32 +249,51 @@
 // Usage stats section
 .usageGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: $spacing-sm;
+
+  @media (max-width: 1080px) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  @media (max-width: 720px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 520px) {
+    grid-template-columns: 1fr;
+  }
 }
 
 .usageCard {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  gap: 4px;
   padding: $spacing-md;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background:
+    linear-gradient(
+      170deg,
+      color-mix(in srgb, var(--primary-color) 6%, var(--bg-primary)) 0%,
+      color-mix(in srgb, var(--bg-primary) 94%, transparent) 66%
+    );
+  border: 1px solid color-mix(in srgb, var(--border-color) 86%, transparent);
   border-radius: $radius-md;
-  text-align: center;
+  box-shadow: 0 10px 16px -20px rgba(2, 6, 23, 0.72);
 }
 
 .usageValue {
   font-size: 22px;
   font-weight: 800;
-  color: var(--primary-color);
+  color: var(--text-primary);
+  line-height: 1.2;
 }
 
 .usageLabel {
   font-size: 12px;
   color: var(--text-secondary);
-  margin-top: 4px;
+  line-height: 1.3;
 }
 
 .usageLoading,
@@ -345,7 +312,6 @@
   font-size: 13px;
   color: var(--primary-color);
   text-decoration: none;
-  margin-top: $spacing-xs;
 
   &:hover {
     text-decoration: underline;

@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ModelMappingDiagram, type ModelMappingDiagramRef } from '@/components/modelAlias';
-import { IconChevronUp } from '@/components/ui/icons';
+import { IconChevronUp, IconPencil, IconTrash2 } from '@/components/ui/icons';
 import type { OAuthModelAliasEntry } from '@/types';
 import type { AuthFileModelItem } from '@/features/authFiles/constants';
 import styles from '@/pages/AuthFilesPage.module.scss';
@@ -56,16 +56,18 @@ export function OAuthModelAliasCard(props: OAuthModelAliasCardProps) {
         <div className={styles.cardExtraButtons}>
           <div className={styles.viewModeSwitch}>
             <Button
-              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+              variant="ghost"
               size="sm"
+              className={`${styles.viewModeButton} ${viewMode === 'list' ? styles.viewModeButtonActive : ''}`}
               onClick={() => onViewModeChange('list')}
               disabled={disableControls || modelAliasError === 'unsupported'}
             >
               {t('oauth_model_alias.view_mode_list')}
             </Button>
             <Button
-              variant={viewMode === 'diagram' ? 'secondary' : 'ghost'}
+              variant="ghost"
               size="sm"
+              className={`${styles.viewModeButton} ${viewMode === 'diagram' ? styles.viewModeButtonActive : ''}`}
               onClick={() => onViewModeChange('diagram')}
               disabled={disableControls || modelAliasError === 'unsupported'}
             >
@@ -127,19 +129,51 @@ export function OAuthModelAliasCard(props: OAuthModelAliasCardProps) {
           {Object.entries(modelAlias).map(([provider, mappings]) => (
             <div key={provider} className={styles.excludedItem}>
               <div className={styles.excludedInfo}>
-                <div className={styles.excludedProvider}>{provider}</div>
-                <div className={styles.excludedModels}>
-                  {mappings?.length
-                    ? t('oauth_model_alias.model_count', { count: mappings.length })
-                    : t('oauth_model_alias.no_models')}
+                <div className={styles.excludedProviderRow}>
+                  <div className={styles.excludedProvider}>{provider}</div>
                 </div>
+                {mappings?.length ? (
+                  <div className={styles.aliasMappingChips}>
+                    {mappings.map((mapping, index) => (
+                      <span
+                        key={`${provider}-${mapping.name}-${mapping.alias}-${index}`}
+                        className={styles.aliasMappingChip}
+                        title={`${mapping.name} -> ${mapping.alias}`}
+                      >
+                        <span className={styles.aliasSource}>{mapping.name}</span>
+                        <span className={styles.aliasTarget}>{mapping.alias}</span>
+                        {mapping.fork && (
+                          <span className={styles.aliasForkBadge}>
+                            {t('oauth_model_alias.alias_fork_label')}
+                          </span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div className={styles.excludedModels}>{t('oauth_model_alias.no_models')}</div>
+                )}
               </div>
               <div className={styles.excludedActions}>
-                <Button variant="secondary" size="sm" onClick={() => onEditProvider(provider)}>
-                  {t('common.edit')}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className={styles.iconButton}
+                  onClick={() => onEditProvider(provider)}
+                  title={t('common.edit')}
+                  aria-label={t('common.edit')}
+                >
+                  <IconPencil className={styles.actionIcon} size={16} />
                 </Button>
-                <Button variant="danger" size="sm" onClick={() => onDeleteProvider(provider)}>
-                  {t('oauth_model_alias.delete')}
+                <Button
+                  variant="danger"
+                  size="sm"
+                  className={styles.iconButton}
+                  onClick={() => onDeleteProvider(provider)}
+                  title={t('oauth_model_alias.delete')}
+                  aria-label={t('oauth_model_alias.delete')}
+                >
+                  <IconTrash2 className={styles.actionIcon} size={16} />
                 </Button>
               </div>
             </div>

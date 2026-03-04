@@ -16,6 +16,7 @@ import type { ProviderKeyConfig } from '@/types';
 import { buildHeaderObject, headersToEntries, normalizeHeaderEntries } from '@/utils/headers';
 import type { VertexFormState } from '@/components/providers';
 import layoutStyles from './AiProvidersEditLayout.module.scss';
+import styles from './AiProvidersPage.module.scss';
 
 type LocationState = { fromAiProviders?: boolean } | null;
 
@@ -284,12 +285,12 @@ export function AiProvidersVertexEditPage() {
       isLoading={loading}
       loadingLabel={t('common.loading')}
     >
-      <Card>
+      <Card className={layoutStyles.formCard}>
         {error && <div className="error-box">{error}</div>}
         {invalidIndexParam || invalidIndex ? (
-          <div className="hint">{t('common.invalid_provider_index')}</div>
+          <div className={styles.sectionHint}>{t('common.invalid_provider_index')}</div>
         ) : (
-          <>
+          <div className={styles.openaiEditForm}>
             <Input
               label={t('ai_providers.vertex_add_modal_key_label')}
               placeholder={t('ai_providers.vertex_add_modal_key_placeholder')}
@@ -329,8 +330,10 @@ export function AiProvidersVertexEditPage() {
               removeButtonAriaLabel={t('common.delete')}
               disabled={disableControls || saving}
             />
-            <div className="form-group">
-              <label>{t('ai_providers.vertex_models_label')}</label>
+            <div className={styles.modelConfigSection}>
+              <div className={styles.modelConfigHeader}>
+                <label className={styles.modelConfigTitle}>{t('ai_providers.vertex_models_label')}</label>
+              </div>
               <ModelInputList
                 entries={form.modelEntries}
                 onChange={(entries) => setForm((prev) => ({ ...prev, modelEntries: entries }))}
@@ -340,10 +343,14 @@ export function AiProvidersVertexEditPage() {
                 removeButtonTitle={t('common.delete')}
                 removeButtonAriaLabel={t('common.delete')}
                 disabled={disableControls || saving}
+                className={styles.modelInputList}
+                rowClassName={styles.modelInputRow}
+                inputClassName={styles.modelInputField}
+                removeButtonClassName={styles.modelRowRemoveButton}
               />
-              <div className="hint">{t('ai_providers.vertex_models_hint')}</div>
+              <div className={styles.sectionHint}>{t('ai_providers.vertex_models_hint')}</div>
             </div>
-          </>
+          </div>
         )}
       </Card>
     </SecondaryScreenShell>

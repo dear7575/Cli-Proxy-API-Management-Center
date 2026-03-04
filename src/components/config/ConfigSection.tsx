@@ -1,5 +1,6 @@
 import type { PropsWithChildren, ReactNode } from 'react';
 import { Card } from '@/components/ui/Card';
+import styles from './ConfigSection.module.scss';
 
 interface ConfigSectionProps {
   title: ReactNode;
@@ -8,13 +9,19 @@ interface ConfigSectionProps {
 }
 
 export function ConfigSection({ title, description, className, children }: PropsWithChildren<ConfigSectionProps>) {
+  const descriptionTitle = typeof description === 'string' ? description : undefined;
+  const cardClassName = className ? `${styles.configSectionCard} ${className}` : styles.configSectionCard;
+
   return (
-    <Card title={title} className={className}>
-      {description && (
-        <p style={{ margin: '-4px 0 16px 0', color: 'var(--text-secondary)', fontSize: 13 }}>
+    <Card
+      title={title}
+      extra={description ? (
+        <span className={styles.headerDescription} title={descriptionTitle}>
           {description}
-        </p>
-      )}
+        </span>
+      ) : undefined}
+      className={cardClassName}
+    >
       {children}
     </Card>
   );

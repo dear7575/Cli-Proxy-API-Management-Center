@@ -6,7 +6,9 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  border-radius: $radius-lg;
   overflow: hidden;
+  background: var(--bg-secondary);
 
   &__layer {
     display: flex;
@@ -14,6 +16,8 @@
     gap: $spacing-lg;
     min-height: 0;
     flex: 1;
+    border-radius: inherit;
+    overflow: hidden;
     background: var(--bg-secondary);
     backface-visibility: hidden;
     transform: translateZ(0);
@@ -22,6 +26,7 @@
     &--exit {
       position: absolute;
       inset: 0;
+      border-radius: inherit;
       overflow: hidden;
       pointer-events: none;
       will-change: transform, opacity;
@@ -36,6 +41,7 @@
         display: flex;
         position: absolute;
         inset: 0;
+        border-radius: inherit;
         overflow: hidden;
         pointer-events: none;
         opacity: 0;

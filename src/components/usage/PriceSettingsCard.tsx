@@ -1,11 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
+import { IconPencil, IconTrash2 } from '@/components/ui/icons';
 import type { ModelPrice } from '@/utils/usage';
+import { UsageTablePagination } from './UsageTablePagination';
 import styles from '@/pages/UsagePage.module.scss';
 
 export interface PriceSettingsCardProps {
@@ -32,6 +34,8 @@ export function PriceSettingsCard({
   const [editPrompt, setEditPrompt] = useState('');
   const [editCompletion, setEditCompletion] = useState('');
   const [editCache, setEditCache] = useState('');
+  const [listPage, setListPage] = useState(1);
+  const [listPageSize, setListPageSize] = useState(10);
 
   const handleSavePrice = () => {
     if (!selectedModel) return;
@@ -92,6 +96,33 @@ export function PriceSettingsCard({
     [modelNames, t]
   );
 
+  const priceRows = useMemo(
+    () =>
+      Object.entries(modelPrices)
+        .map(([model, price]) => ({ model, price }))
+        .sort((a, b) => a.model.localeCompare(b.model, undefined, { sensitivity: 'base', numeric: true })),
+    [modelPrices]
+  );
+  const listTotalPages = Math.max(1, Math.ceil(priceRows.length / listPageSize));
+  const safeListPage = Math.min(listPage, listTotalPages);
+  const listStart = (safeListPage - 1) * listPageSize;
+  const listItems = priceRows.slice(listStart, listStart + listPageSize);
+
+  useEffect(() => {
+    if (listPage <= listTotalPages) return;
+    setListPage(listTotalPages);
+  }, [listPage, listTotalPages]);
+
+  useEffect(() => {
+    setListPage(1);
+  }, [priceRows.length]);
+
+  const handleListPageSizeChange = (size: number) => {
+    if (!Number.isFinite(size) || size < 1) return;
+    setListPageSize(Math.floor(size));
+    setListPage(1);
+  };
+
   return (
     <Card title={t('usage_stats.model_price_settings')}>
       <div className={styles.pricingSection}>
@@ -137,44 +168,92 @@ export function PriceSettingsCard({
                 step="0.0001"
               />
             </div>
-            <Button variant="primary" onClick={handleSavePrice} disabled={!selectedModel}>
-              {t('common.save')}
-            </Button>
+            <div className={styles.formActionField}>
+              <span className={styles.formActionLabelPlaceholder} aria-hidden="true">
+                {t('usage_stats.model_name')}
+              </span>
+              <Button
+                variant="primary"
+                onClick={handleSavePrice}
+                disabled={!selectedModel}
+              >
+                {t('common.save')}
+              </Button>
+            </div>
           </div>
         </div>
 
         {/* Saved Prices List */}
         <div className={styles.pricesList}>
           <h4 className={styles.pricesTitle}>{t('usage_stats.saved_prices')}</h4>
-          {Object.keys(modelPrices).length > 0 ? (
-            <div className={styles.pricesGrid}>
-              {Object.entries(modelPrices).map(([model, price]) => (
-                <div key={model} className={styles.priceItem}>
-                  <div className={styles.priceInfo}>
-                    <span className={styles.priceModel}>{model}</span>
-                    <div className={styles.priceMeta}>
-                      <span>
-                        {t('usage_stats.model_price_prompt')}: ${price.prompt.toFixed(4)}/1M
-                      </span>
-                      <span>
-                        {t('usage_stats.model_price_completion')}: ${price.completion.toFixed(4)}/1M
-                      </span>
-                      <span>
-                        {t('usage_stats.model_price_cache')}: ${price.cache.toFixed(4)}/1M
-                      </span>
-                    </div>
-                  </div>
-                  <div className={styles.priceActions}>
-                    <Button variant="secondary" size="sm" onClick={() => handleOpenEdit(model)}>
-                      {t('common.edit')}
-                    </Button>
-                    <Button variant="danger" size="sm" onClick={() => handleDeletePrice(model)}>
-                      {t('common.delete')}
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
+          {priceRows.length > 0 ? (
+            <>
+              <div className={`${styles.tableWrapper} ${styles.priceTableWrapper}`}>
+                <table className={`${styles.table} ${styles.priceTable}`}>
+                  <colgroup>
+                    <col className={styles.priceTableColModel} />
+                    <col className={styles.priceTableColValue} />
+                    <col className={styles.priceTableColValue} />
+                    <col className={styles.priceTableColValue} />
+                    <col className={styles.priceTableColActions} />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th>{t('usage_stats.model_price_model')}</th>
+                      <th>{t('usage_stats.model_price_prompt')}</th>
+                      <th>{t('usage_stats.model_price_completion')}</th>
+                      <th>{t('usage_stats.model_price_cache')}</th>
+                      <th>{t('common.action')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {listItems.map(({ model, price }) => (
+                      <tr key={model}>
+                        <td className={`${styles.modelCell} ${styles.tableCellLeft}`} title={model}>
+                          <span className={styles.truncateText}>{model}</span>
+                        </td>
+                        <td className={styles.tableCellMono}>${price.prompt.toFixed(4)}/1M</td>
+                        <td className={styles.tableCellMono}>${price.completion.toFixed(4)}/1M</td>
+                        <td className={styles.tableCellMono}>${price.cache.toFixed(4)}/1M</td>
+                        <td className={styles.tableCellStatus}>
+                          <div className={styles.priceActions}>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className={styles.priceActionIcon}
+                              onClick={() => handleOpenEdit(model)}
+                              title={t('common.edit')}
+                              aria-label={t('common.edit')}
+                            >
+                              <IconPencil size={16} />
+                            </Button>
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              className={styles.priceActionIcon}
+                              onClick={() => handleDeletePrice(model)}
+                              title={t('common.delete')}
+                              aria-label={t('common.delete')}
+                            >
+                              <IconTrash2 size={16} />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className={styles.usageTablePagination}>
+                <UsageTablePagination
+                  totalItems={priceRows.length}
+                  currentPage={safeListPage}
+                  pageSize={listPageSize}
+                  onPageChange={setListPage}
+                  onPageSizeChange={handleListPageSizeChange}
+                />
+              </div>
+            </>
           ) : (
             <div className={styles.hint}>{t('usage_stats.model_price_empty')}</div>
           )}
@@ -184,10 +263,19 @@ export function PriceSettingsCard({
       {/* Edit Modal */}
       <Modal
         open={editModel !== null}
-        title={editModel ?? ''}
+        title={
+          <div className={styles.priceEditModalTitle}>
+            <span className={styles.priceEditModalTitleMain}>
+              {t('common.edit')} {t('usage_stats.model_price_title')}
+            </span>
+            <span className={styles.priceEditModalTitlePill} title={editModel ?? ''}>
+              {editModel ?? ''}
+            </span>
+          </div>
+        }
         onClose={() => setEditModel(null)}
         footer={
-          <div className={styles.priceActions}>
+          <div className={styles.priceEditModalFooterActions}>
             <Button variant="secondary" onClick={() => setEditModel(null)}>
               {t('common.cancel')}
             </Button>
@@ -196,6 +284,7 @@ export function PriceSettingsCard({
             </Button>
           </div>
         }
+        className={styles.priceEditModal}
         width={420}
       >
         <div className={styles.editModalBody}>

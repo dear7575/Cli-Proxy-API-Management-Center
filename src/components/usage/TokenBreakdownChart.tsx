@@ -9,15 +9,11 @@ import {
   type TokenCategory
 } from '@/utils/usage';
 import { buildChartOptions, getHourChartMinWidth } from '@/utils/usage/chartConfig';
+import { USAGE_TOKEN_COLORS } from '@/utils/usage/palette';
 import type { UsagePayload } from './hooks/useUsageData';
 import styles from '@/pages/UsagePage.module.scss';
 
-const TOKEN_COLORS: Record<TokenCategory, { border: string; bg: string }> = {
-  input: { border: '#8b8680', bg: 'rgba(139, 134, 128, 0.25)' },
-  output: { border: '#22c55e', bg: 'rgba(34, 197, 94, 0.25)' },
-  cached: { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.25)' },
-  reasoning: { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.25)' }
-};
+const TOKEN_COLORS: Record<TokenCategory, { border: string; bg: string }> = USAGE_TOKEN_COLORS;
 
 const CATEGORIES: TokenCategory[] = ['input', 'output', 'cached', 'reasoning'];
 
@@ -83,6 +79,10 @@ export function TokenBreakdownChart({
 
     return { chartData: data, chartOptions: options };
   }, [usage, period, isDark, isMobile, hourWindowHours, t]);
+  const chartCanvasStyle =
+    period === 'hour'
+      ? { minWidth: getHourChartMinWidth(chartData.labels.length, isMobile) }
+      : undefined;
 
   return (
     <Card
@@ -111,27 +111,23 @@ export function TokenBreakdownChart({
       ) : chartData.labels.length > 0 ? (
         <div className={styles.chartWrapper}>
           <div className={styles.chartLegend} aria-label="Chart legend">
-            {chartData.datasets.map((dataset, index) => (
-              <div
-                key={`${dataset.label}-${index}`}
-                className={styles.legendItem}
-                title={dataset.label}
-              >
-                <span className={styles.legendDot} style={{ backgroundColor: dataset.borderColor }} />
-                <span className={styles.legendLabel}>{dataset.label}</span>
-              </div>
-            ))}
+            {chartData.datasets.map((dataset, index) => {
+              const legendDotStyle = { backgroundColor: dataset.borderColor };
+              return (
+                <div
+                  key={`${dataset.label}-${index}`}
+                  className={styles.legendItem}
+                  title={dataset.label}
+                >
+                  <span className={styles.legendDot} style={legendDotStyle} />
+                  <span className={styles.legendLabel}>{dataset.label}</span>
+                </div>
+              );
+            })}
           </div>
           <div className={styles.chartArea}>
             <div className={styles.chartScroller}>
-              <div
-                className={styles.chartCanvas}
-                style={
-                  period === 'hour'
-                    ? { minWidth: getHourChartMinWidth(chartData.labels.length, isMobile) }
-                    : undefined
-                }
-              >
+              <div className={styles.chartCanvas} style={chartCanvasStyle}>
                 <Line data={chartData} options={chartOptions} />
               </div>
             </div>

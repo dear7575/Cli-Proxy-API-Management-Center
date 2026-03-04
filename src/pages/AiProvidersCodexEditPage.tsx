@@ -8,6 +8,7 @@ import { HeaderInputList } from '@/components/ui/HeaderInputList';
 import { ModelInputList } from '@/components/ui/ModelInputList';
 import { Modal } from '@/components/ui/Modal';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
+import { ModelDiscoveryPanel } from '@/components/providers/ModelDiscoveryPanel';
 import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { SecondaryScreenShell } from '@/components/common/SecondaryScreenShell';
@@ -408,6 +409,25 @@ export function AiProvidersCodexEditPage() {
     !invalidIndex &&
     Boolean((form.baseUrl ?? '').trim());
   const canApplyModelDiscovery = !disableControls && !saving && !modelDiscoveryFetching;
+  const selectedCount = modelDiscoverySelected.size;
+
+  const handleSelectAllDiscovered = () => {
+    if (!discoveredModelsFiltered.length) return;
+    setModelDiscoverySelected((prev) => {
+      const next = new Set(prev);
+      discoveredModelsFiltered.forEach((model) => {
+        if (model.name) {
+          next.add(model.name);
+        }
+      });
+      return next;
+    });
+  };
+
+  const handleClearDiscoveredSelection = () => {
+    if (!selectedCount) return;
+    setModelDiscoverySelected(new Set());
+  };
 
   return (
     <SecondaryScreenShell
@@ -443,12 +463,12 @@ export function AiProvidersCodexEditPage() {
       isLoading={loading}
       loadingLabel={t('common.loading')}
     >
-      <Card>
+      <Card className={layoutStyles.formCard}>
         {error && <div className="error-box">{error}</div>}
         {invalidIndexParam || invalidIndex ? (
-          <div className="hint">{t('common.invalid_provider_index')}</div>
+          <div className={styles.sectionHint}>{t('common.invalid_provider_index')}</div>
         ) : (
-          <>
+          <div className={styles.openaiEditForm}>
             <Input
               label={t('ai_providers.codex_add_modal_key_label')}
               value={form.apiKey}
@@ -485,15 +505,17 @@ export function AiProvidersCodexEditPage() {
               onChange={(e) => setForm((prev) => ({ ...prev, baseUrl: e.target.value }))}
               disabled={disableControls || saving}
             />
-            <div className="form-group">
-              <label>{t('ai_providers.codex_websockets_label')}</label>
+            <div className={styles.modelConfigSection}>
+              <div className={styles.modelConfigHeader}>
+                <label className={styles.modelConfigTitle}>{t('ai_providers.codex_websockets_label')}</label>
+              </div>
               <ToggleSwitch
                 checked={Boolean(form.websockets)}
                 onChange={(value) => setForm((prev) => ({ ...prev, websockets: value }))}
                 disabled={disableControls || saving}
                 ariaLabel={t('ai_providers.codex_websockets_label')}
               />
-              <div className="hint">{t('ai_providers.codex_websockets_hint')}</div>
+              <div className={styles.sectionHint}>{t('ai_providers.codex_websockets_hint')}</div>
             </div>
             <Input
               label={t('ai_providers.codex_add_modal_proxy_label')}
@@ -556,8 +578,10 @@ export function AiProvidersCodexEditPage() {
                 removeButtonAriaLabel={t('common.delete')}
               />
             </div>
-            <div className="form-group">
-              <label>{t('ai_providers.excluded_models_label')}</label>
+            <div className={styles.modelConfigSection}>
+              <div className={styles.modelConfigHeader}>
+                <label className={styles.modelConfigTitle}>{t('ai_providers.excluded_models_label')}</label>
+              </div>
               <textarea
                 className="input"
                 placeholder={t('ai_providers.excluded_models_placeholder')}
@@ -566,7 +590,7 @@ export function AiProvidersCodexEditPage() {
                 rows={4}
                 disabled={disableControls || saving}
               />
-              <div className="hint">{t('ai_providers.excluded_models_hint')}</div>
+              <div className={styles.sectionHint}>{t('ai_providers.excluded_models_hint')}</div>
             </div>
 
             <Modal
@@ -574,6 +598,7 @@ export function AiProvidersCodexEditPage() {
               title={t('ai_providers.codex_models_fetch_title')}
               onClose={() => setModelDiscoveryOpen(false)}
               width={720}
+              className={styles.modelDiscoveryModal}
               footer={
                 <>
                   <Button
@@ -594,78 +619,38 @@ export function AiProvidersCodexEditPage() {
                 </>
               }
             >
-              <div className={styles.openaiModelsContent}>
-                <div className={styles.sectionHint}>{t('ai_providers.codex_models_fetch_hint')}</div>
-                <div className={styles.openaiModelsEndpointSection}>
-                  <label className={styles.openaiModelsEndpointLabel}>
-                    {t('ai_providers.codex_models_fetch_url_label')}
-                  </label>
-                  <div className={styles.openaiModelsEndpointControls}>
-                    <input
-                      className={`input ${styles.openaiModelsEndpointInput}`}
-                      readOnly
-                      value={modelDiscoveryEndpoint}
-                    />
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => void fetchCodexModelDiscovery()}
-                      loading={modelDiscoveryFetching}
-                      disabled={disableControls || saving}
-                    >
-                      {t('ai_providers.codex_models_fetch_refresh')}
-                    </Button>
-                  </div>
-                </div>
-                <Input
-                  label={t('ai_providers.codex_models_search_label')}
-                  placeholder={t('ai_providers.codex_models_search_placeholder')}
-                  value={modelDiscoverySearch}
-                  onChange={(e) => setModelDiscoverySearch(e.target.value)}
-                  disabled={modelDiscoveryFetching}
-                />
-                {modelDiscoveryError && <div className="error-box">{modelDiscoveryError}</div>}
-                {modelDiscoveryFetching ? (
-                  <div className={styles.sectionHint}>{t('ai_providers.codex_models_fetch_loading')}</div>
-                ) : discoveredModels.length === 0 ? (
-                  <div className={styles.sectionHint}>{t('ai_providers.codex_models_fetch_empty')}</div>
-                ) : discoveredModelsFiltered.length === 0 ? (
-                  <div className={styles.sectionHint}>{t('ai_providers.codex_models_search_empty')}</div>
-                ) : (
-                  <div className={styles.modelDiscoveryList}>
-                    {discoveredModelsFiltered.map((model) => {
-                      const checked = modelDiscoverySelected.has(model.name);
-                      return (
-                        <label
-                          key={model.name}
-                          className={`${styles.modelDiscoveryRow} ${
-                            checked ? styles.modelDiscoveryRowSelected : ''
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleModelDiscoverySelection(model.name)}
-                          />
-                          <div className={styles.modelDiscoveryMeta}>
-                            <div className={styles.modelDiscoveryName}>
-                              {model.name}
-                              {model.alias && (
-                                <span className={styles.modelDiscoveryAlias}>{model.alias}</span>
-                              )}
-                            </div>
-                            {model.description && (
-                              <div className={styles.modelDiscoveryDesc}>{model.description}</div>
-                            )}
-                          </div>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              <ModelDiscoveryPanel
+                hintText={t('ai_providers.codex_models_fetch_hint')}
+                endpointLabel={t('ai_providers.codex_models_fetch_url_label')}
+                endpointValue={modelDiscoveryEndpoint}
+                refreshLabel={t('ai_providers.codex_models_fetch_refresh')}
+                onRefresh={() => void fetchCodexModelDiscovery()}
+                refreshLoading={modelDiscoveryFetching}
+                refreshDisabled={disableControls || saving}
+                searchLabel={t('ai_providers.codex_models_search_label')}
+                searchPlaceholder={t('ai_providers.codex_models_search_placeholder')}
+                searchValue={modelDiscoverySearch}
+                onSearchChange={setModelDiscoverySearch}
+                searchDisabled={modelDiscoveryFetching}
+                selectedText={t('auth_files.batch_selected', { count: selectedCount })}
+                selectAllLabel={t('auth_files.batch_select_all')}
+                clearSelectedLabel={t('auth_files.batch_deselect')}
+                onSelectAll={handleSelectAllDiscovered}
+                onClearSelected={handleClearDiscoveredSelection}
+                selectAllDisabled={modelDiscoveryFetching || discoveredModelsFiltered.length === 0}
+                clearSelectedDisabled={modelDiscoveryFetching || selectedCount === 0}
+                error={modelDiscoveryError}
+                loading={modelDiscoveryFetching}
+                loadingText={t('ai_providers.codex_models_fetch_loading')}
+                emptyText={t('ai_providers.codex_models_fetch_empty')}
+                searchEmptyText={t('ai_providers.codex_models_search_empty')}
+                models={discoveredModels}
+                filteredModels={discoveredModelsFiltered}
+                selectedNames={modelDiscoverySelected}
+                onToggleModel={toggleModelDiscoverySelection}
+              />
             </Modal>
-          </>
+          </div>
         )}
       </Card>
     </SecondaryScreenShell>

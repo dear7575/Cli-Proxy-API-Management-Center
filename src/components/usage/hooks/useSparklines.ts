@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { collectUsageDetails, extractTotalTokens } from '@/utils/usage';
+import { USAGE_SPARKLINE_COLORS } from '@/utils/usage/palette';
 import type { UsagePayload } from './useUsageData';
 
 export interface SparklineData {
@@ -109,8 +110,8 @@ export function useSparklines({ usage, loading, nowMs }: UseSparklinesOptions): 
     () =>
       buildSparkline(
         { labels: lastHourSeries.labels, data: lastHourSeries.requests },
-        '#8b8680',
-        'rgba(139, 134, 128, 0.18)'
+        USAGE_SPARKLINE_COLORS.requests.line,
+        USAGE_SPARKLINE_COLORS.requests.area
       ),
     [buildSparkline, lastHourSeries.labels, lastHourSeries.requests]
   );
@@ -119,8 +120,8 @@ export function useSparklines({ usage, loading, nowMs }: UseSparklinesOptions): 
     () =>
       buildSparkline(
         { labels: lastHourSeries.labels, data: lastHourSeries.tokens },
-        '#8b5cf6',
-        'rgba(139, 92, 246, 0.18)'
+        USAGE_SPARKLINE_COLORS.tokens.line,
+        USAGE_SPARKLINE_COLORS.tokens.area
       ),
     [buildSparkline, lastHourSeries.labels, lastHourSeries.tokens]
   );
@@ -129,8 +130,8 @@ export function useSparklines({ usage, loading, nowMs }: UseSparklinesOptions): 
     () =>
       buildSparkline(
         { labels: lastHourSeries.labels, data: lastHourSeries.requests },
-        '#22c55e',
-        'rgba(34, 197, 94, 0.18)'
+        USAGE_SPARKLINE_COLORS.rpm.line,
+        USAGE_SPARKLINE_COLORS.rpm.area
       ),
     [buildSparkline, lastHourSeries.labels, lastHourSeries.requests]
   );
@@ -139,8 +140,8 @@ export function useSparklines({ usage, loading, nowMs }: UseSparklinesOptions): 
     () =>
       buildSparkline(
         { labels: lastHourSeries.labels, data: lastHourSeries.tokens },
-        '#f97316',
-        'rgba(249, 115, 22, 0.18)'
+        USAGE_SPARKLINE_COLORS.tpm.line,
+        USAGE_SPARKLINE_COLORS.tpm.area
       ),
     [buildSparkline, lastHourSeries.labels, lastHourSeries.tokens]
   );
@@ -149,8 +150,8 @@ export function useSparklines({ usage, loading, nowMs }: UseSparklinesOptions): 
     () =>
       buildSparkline(
         { labels: lastHourSeries.labels, data: lastHourSeries.tokens },
-        '#f59e0b',
-        'rgba(245, 158, 11, 0.18)'
+        USAGE_SPARKLINE_COLORS.cost.line,
+        USAGE_SPARKLINE_COLORS.cost.area
       ),
     [buildSparkline, lastHourSeries.labels, lastHourSeries.tokens]
   );

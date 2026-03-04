@@ -1,0 +1,66 @@
+.fieldWrap {
+  position: relative;
+}
+
+.fieldInput {
+  padding-right: 32px;
+}
+
+.rightControls {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  pointer-events: auto;
+  cursor: pointer;
+  height: 100%;
+}
+
+.rightControlsDisabled {
+  pointer-events: none;
+  cursor: default;
+}
+
+.chevronIcon {
+  opacity: 0.5;
+  margin-left: 4px;
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.option {
+  padding: 8px 12px;
+  cursor: pointer;
+  background-color: transparent;
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  font-size: 0.9rem;
+}
+
+.optionActive {
+  background-color: var(--bg-tertiary);
+}
+
+.optionValue {
+  font-weight: 500;
+}
+
+.optionLabel {
+  font-size: 0.85em;
+  color: var(--text-secondary);
+}

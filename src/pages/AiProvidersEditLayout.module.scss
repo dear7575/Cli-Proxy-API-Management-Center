@@ -1,21 +1,114 @@
+@use '../styles/variables' as *;
+@use '../styles/mixins' as *;
+
 .content {
   width: 100%;
   max-width: 960px;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-lg;
+}
+
+.content > * {
+  animation: provider-edit-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes provider-edit-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.formCard {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(16px, 2vw, 22px);
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(
+        140deg,
+        color-mix(in srgb, var(--primary-color) 6%, transparent) 0%,
+        transparent 54%
+      );
+  }
+}
+
+.formCard > :global(.error-box) {
+  margin-bottom: 12px;
+}
+
+.formCard :global(.form-group) {
+  margin-bottom: 0;
+  padding: 11px 12px;
+  border-radius: $radius-md;
+  border: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
+  background:
+    linear-gradient(
+      165deg,
+      color-mix(in srgb, var(--bg-secondary) 92%, transparent) 0%,
+      color-mix(in srgb, var(--bg-primary) 96%, transparent) 72%
+    );
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.formCard :global(.form-group:focus-within) {
+  border-color: color-mix(in srgb, var(--primary-color) 52%, var(--border-color));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 16%, transparent);
+}
+
+.formCard :global(.form-group > label) {
+  letter-spacing: 0.01em;
+}
+
+.formCard :global(.form-group .hint) {
+  line-height: 1.45;
+}
+
+.formCard :global(.header-input-list) {
+  gap: 10px;
+}
+
+.formCard :global(.header-input-row) {
+  padding: 10px;
+  border-radius: $radius-md;
+  border: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 70%, transparent);
+}
+
+.formCard :global(.header-input-row .btn.btn-ghost) {
+  border-radius: $radius-full;
 }
 
 .floatingActions {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  padding: 4px;
+  border-radius: $radius-full;
+  background: color-mix(in srgb, var(--bg-primary) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
 }
 
 .floatingBackButton {
   min-width: 82px;
+  border-radius: $radius-full;
 }
 
 .floatingSaveButton {
   min-width: 88px;
+  border-radius: $radius-full;
 }
 
 .upstreamApiKeyRow {
@@ -24,10 +117,37 @@
   gap: 8px;
   flex-wrap: wrap;
   margin-bottom: 16px;
+  padding: 10px 12px;
+  border-radius: $radius-md;
+  border: 1px dashed color-mix(in srgb, var(--border-color) 80%, transparent);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--primary-color) 7%, var(--bg-secondary)) 0%,
+      color-mix(in srgb, var(--bg-secondary) 92%, transparent) 66%
+    );
 }
 
 .upstreamApiKeyHint {
   margin: 0;
   color: var(--text-secondary);
   font-size: 13px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content > * {
+    animation: none;
+  }
+}
+
+@include mobile {
+  .floatingActions {
+    padding: 2px;
+    gap: 6px;
+  }
+
+  .floatingBackButton,
+  .floatingSaveButton {
+    min-width: 78px;
+  }
 }

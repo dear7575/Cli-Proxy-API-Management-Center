@@ -5,6 +5,9 @@
   flex-direction: column;
   gap: $spacing-lg;
   min-height: 0;
+  border-radius: $radius-lg;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--bg-secondary) 72%, transparent);
 }
 
 .topBar {
@@ -16,8 +19,12 @@
   align-items: center;
   gap: $spacing-md;
   padding: $spacing-sm $spacing-md;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
+  background: var(--glass-surface-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-surface-border);
+  border-radius: $radius-lg;
+  box-shadow: 0 10px 20px -20px rgba(2, 6, 23, 0.72);
   min-height: 44px;
 }
 
@@ -38,6 +45,13 @@
   padding-right: 10px;
   justify-self: start;
   gap: 0;
+
+  &:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--bg-primary) 86%, transparent),
+      0 0 0 4px color-mix(in srgb, var(--primary-color) 40%, transparent);
+  }
 }
 
 .backButton > span:last-child {
@@ -82,6 +96,28 @@
   gap: $spacing-lg;
 }
 
+.content > * {
+  animation: secondary-shell-content-rise 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.content > *:nth-child(1) { animation-delay: 0ms; }
+.content > *:nth-child(2) { animation-delay: 34ms; }
+.content > *:nth-child(3) { animation-delay: 68ms; }
+.content > *:nth-child(4) { animation-delay: 102ms; }
+.content > *:nth-child(5) { animation-delay: 136ms; }
+
+@keyframes secondary-shell-content-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .contentWithFloatingAction {
   padding-bottom: calc(
     var(--secondary-shell-floating-action-height, 56px) + 12px + env(safe-area-inset-bottom)
@@ -106,18 +142,18 @@
   gap: 8px;
   padding: 10px 12px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--bg-primary) 82%, transparent);
+  background: var(--glass-surface-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--glass-surface-border);
+  box-shadow: 0 8px 24px rgba(2, 6, 23, 0.18);
 }
 
 :global([data-theme='dark']) {
   .floatingActionSurface {
-    background: color-mix(in srgb, var(--bg-primary) 82%, transparent);
-    border-color: color-mix(in srgb, var(--border-color) 55%, transparent);
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+    background: var(--glass-surface-bg);
+    border-color: var(--glass-surface-border);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.46);
   }
 }
 
@@ -128,5 +164,11 @@
 
   .floatingActionSurface {
     padding: 8px 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content > * {
+    animation: none;
   }
 }

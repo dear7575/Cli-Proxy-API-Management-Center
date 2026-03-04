@@ -5,10 +5,12 @@ export function LoadingSpinner({
   size?: number;
   className?: string;
 }) {
+  const spinnerStyle = { width: size, height: size, borderWidth: size / 7 };
+
   return (
     <div
       className={`loading-spinner${className ? ` ${className}` : ''}`}
-      style={{ width: size, height: size, borderWidth: size / 7 }}
+      style={spinnerStyle}
       role="status"
       aria-live="polite"
     />

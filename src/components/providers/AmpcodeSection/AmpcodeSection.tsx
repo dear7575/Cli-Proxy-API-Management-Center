@@ -67,7 +67,7 @@ export function AmpcodeSection({
                 {(config?.forceModelMappings ?? false) ? t('common.yes') : t('common.no')}
               </span>
             </div>
-            <div className={styles.fieldRow} style={{ marginTop: 8 }}>
+            <div className={`${styles.fieldRow} ${styles.fieldRowOffsetTop}`}>
               <span className={styles.fieldLabel}>{t('ai_providers.ampcode_model_mappings_count')}:</span>
               <span className={styles.fieldValue}>{config?.modelMappings?.length || 0}</span>
             </div>
