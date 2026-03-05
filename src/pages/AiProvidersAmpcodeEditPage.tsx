@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { HintLabel } from '@/components/ui/HintLabel';
 import { Input } from '@/components/ui/Input';
 import { ModelInputList } from '@/components/ui/ModelInputList';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
@@ -302,21 +303,29 @@ export function AiProvidersAmpcodeEditPage() {
         {error && <div className="error-box">{error}</div>}
         <div className={styles.openaiEditForm}>
           <Input
-            label={t('ai_providers.ampcode_upstream_url_label')}
+            label={
+              <HintLabel
+                label={t('ai_providers.ampcode_upstream_url_label')}
+                hint={t('ai_providers.ampcode_upstream_url_hint')}
+              />
+            }
             placeholder={t('ai_providers.ampcode_upstream_url_placeholder')}
             value={form.upstreamUrl}
             onChange={(e) => setForm((prev) => ({ ...prev, upstreamUrl: e.target.value }))}
             disabled={loading || saving || disableControls}
-            hint={t('ai_providers.ampcode_upstream_url_hint')}
           />
           <Input
-            label={t('ai_providers.ampcode_upstream_api_key_label')}
+            label={
+              <HintLabel
+                label={t('ai_providers.ampcode_upstream_api_key_label')}
+                hint={t('ai_providers.ampcode_upstream_api_key_hint')}
+              />
+            }
             placeholder={t('ai_providers.ampcode_upstream_api_key_placeholder')}
             type="password"
             value={form.upstreamApiKey}
             onChange={(e) => setForm((prev) => ({ ...prev, upstreamApiKey: e.target.value }))}
             disabled={loading || saving || disableControls}
-            hint={t('ai_providers.ampcode_upstream_api_key_hint')}
           />
           <div className={layoutStyles.upstreamApiKeyRow}>
             <div className={layoutStyles.upstreamApiKeyHint}>
@@ -338,21 +347,42 @@ export function AiProvidersAmpcodeEditPage() {
 
           <div className={styles.modelConfigSection}>
             <div className={styles.modelConfigHeader}>
-              <label className={styles.modelConfigTitle}>
-                {t('ai_providers.ampcode_force_model_mappings_label')}
-              </label>
+              <HintLabel
+                className={styles.modelConfigTitle}
+                label={t('ai_providers.ampcode_force_model_mappings_label')}
+                hint={t('ai_providers.ampcode_force_model_mappings_hint')}
+              />
             </div>
             <ToggleSwitch
               checked={form.forceModelMappings}
               onChange={(value) => setForm((prev) => ({ ...prev, forceModelMappings: value }))}
               disabled={loading || saving || disableControls}
             />
-            <div className={styles.sectionHint}>{t('ai_providers.ampcode_force_model_mappings_hint')}</div>
           </div>
 
           <div className={styles.modelConfigSection}>
             <div className={styles.modelConfigHeader}>
-              <label className={styles.modelConfigTitle}>{t('ai_providers.ampcode_model_mappings_label')}</label>
+              <HintLabel
+                className={styles.modelConfigTitle}
+                label={t('ai_providers.ampcode_model_mappings_label')}
+                hint={t('ai_providers.ampcode_model_mappings_hint')}
+              />
+              <div className={styles.modelConfigToolbar}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setMappingsDirty(true);
+                    setForm((prev) => ({
+                      ...prev,
+                      mappingEntries: [...prev.mappingEntries, { name: '', alias: '' }],
+                    }));
+                  }}
+                  disabled={loading || saving || disableControls}
+                >
+                  {t('ai_providers.ampcode_model_mappings_add_btn')}
+                </Button>
+              </div>
             </div>
             <ModelInputList
               entries={form.mappingEntries}
@@ -360,18 +390,17 @@ export function AiProvidersAmpcodeEditPage() {
                 setMappingsDirty(true);
                 setForm((prev) => ({ ...prev, mappingEntries: entries }));
               }}
-              addLabel={t('ai_providers.ampcode_model_mappings_add_btn')}
               namePlaceholder={t('ai_providers.ampcode_model_mappings_from_placeholder')}
               aliasPlaceholder={t('ai_providers.ampcode_model_mappings_to_placeholder')}
               removeButtonTitle={t('common.delete')}
               removeButtonAriaLabel={t('common.delete')}
               disabled={loading || saving || disableControls}
+              hideAddButton
               className={styles.modelInputList}
               rowClassName={styles.modelInputRow}
               inputClassName={styles.modelInputField}
               removeButtonClassName={styles.modelRowRemoveButton}
             />
-            <div className={styles.sectionHint}>{t('ai_providers.ampcode_model_mappings_hint')}</div>
           </div>
         </div>
       </Card>

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { HeaderInputList } from '@/components/ui/HeaderInputList';
+import { HintLabel } from '@/components/ui/HintLabel';
 import { Input } from '@/components/ui/Input';
 import { ModelInputList } from '@/components/ui/ModelInputList';
 import { Select } from '@/components/ui/Select';
@@ -390,29 +391,8 @@ export function AiProvidersOpenAIEditPage() {
       setTestMessage('');
     };
 
-    const addEntry = () => {
-      setForm((prev) => ({ ...prev, apiKeyEntries: [...list, buildApiKeyEntry()] }));
-      resetDraftKeyTestStatuses(list.length + 1);
-      setTestStatus('idle');
-      setTestMessage('');
-    };
-
     return (
       <div className={styles.keyEntriesList}>
-        <div className={styles.keyEntriesToolbar}>
-          <span className={styles.keyEntriesCount}>
-            {t('ai_providers.openai_keys_count')}: {list.length}
-          </span>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={addEntry}
-            disabled={saving || disableControls || isTestingKeys}
-            className={styles.addKeyButton}
-          >
-            {t('ai_providers.openai_keys_add_btn')}
-          </Button>
-        </div>
         <div className={styles.keyTableShell}>
           {/* 表头 */}
           <div className={styles.keyTableHeader}>
@@ -468,7 +448,7 @@ export function AiProvidersOpenAIEditPage() {
                 {/* 操作按钮 */}
                 <div className={styles.keyTableColAction}>
                   <Button
-                    variant="secondary"
+                    variant="primary"
                     size="sm"
                     onClick={() => void testSingleKey(index)}
                     disabled={saving || disableControls || isTestingKeys || !canTestKey}
@@ -477,7 +457,7 @@ export function AiProvidersOpenAIEditPage() {
                     {t('ai_providers.openai_test_single_action')}
                   </Button>
                   <Button
-                    variant="ghost"
+                    variant="danger"
                     size="sm"
                     onClick={() => removeEntry(index)}
                     disabled={saving || disableControls || isTestingKeys || list.length <= 1}
@@ -539,8 +519,7 @@ export function AiProvidersOpenAIEditPage() {
               disabled={saving || disableControls || isTestingKeys}
             />
             <Input
-              label={t('ai_providers.priority_label')}
-              hint={t('ai_providers.priority_hint')}
+              label={<HintLabel label={t('ai_providers.priority_label')} hint={t('ai_providers.priority_hint')} />}
               type="number"
               step={1}
               value={form.priority ?? ''}
@@ -555,11 +534,10 @@ export function AiProvidersOpenAIEditPage() {
               disabled={saving || disableControls || isTestingKeys}
             />
             <Input
-              label={t('ai_providers.prefix_label')}
+              label={<HintLabel label={t('ai_providers.prefix_label')} hint={t('ai_providers.prefix_hint')} />}
               placeholder={t('ai_providers.prefix_placeholder')}
               value={form.prefix ?? ''}
               onChange={(e) => setForm((prev) => ({ ...prev, prefix: e.target.value }))}
-              hint={t('ai_providers.prefix_hint')}
               disabled={saving || disableControls || isTestingKeys}
             />
             <Input
@@ -569,26 +547,55 @@ export function AiProvidersOpenAIEditPage() {
               disabled={saving || disableControls || isTestingKeys}
             />
 
-            <HeaderInputList
-              entries={form.headers}
-              onChange={(entries) => setForm((prev) => ({ ...prev, headers: entries }))}
-              addLabel={t('common.custom_headers_add')}
-              keyPlaceholder={t('common.custom_headers_key_placeholder')}
-              valuePlaceholder={t('common.custom_headers_value_placeholder')}
-              removeButtonTitle={t('common.delete')}
-              removeButtonAriaLabel={t('common.delete')}
-              disabled={saving || disableControls || isTestingKeys}
-            />
+            <div className={styles.modelConfigSection}>
+              <div className={styles.modelConfigHeader}>
+                <HintLabel
+                  className={styles.modelConfigTitle}
+                  label={t('common.custom_headers_label')}
+                  hint={t('common.custom_headers_hint')}
+                />
+                <div className={styles.modelConfigToolbar}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        headers: [...(prev.headers.length ? prev.headers : [{ key: '', value: '' }]), { key: '', value: '' }],
+                      }))
+                    }
+                    disabled={saving || disableControls || isTestingKeys}
+                  >
+                    {t('common.custom_headers_add')}
+                  </Button>
+                </div>
+              </div>
+              <HeaderInputList
+                entries={form.headers}
+                onChange={(entries) => setForm((prev) => ({ ...prev, headers: entries }))}
+                addLabel={t('common.custom_headers_add')}
+                keyPlaceholder={t('common.custom_headers_key_placeholder')}
+                valuePlaceholder={t('common.custom_headers_value_placeholder')}
+                removeButtonTitle={t('common.delete')}
+                removeButtonAriaLabel={t('common.delete')}
+                disabled={saving || disableControls || isTestingKeys}
+                hideAddButton
+              />
+            </div>
 
             {/* 模型配置区域 - 统一布局 */}
             <div className={styles.modelConfigSection}>
               {/* 标题行 */}
               <div className={styles.modelConfigHeader}>
-                <label className={styles.modelConfigTitle}>
-                  {hasIndexParam
-                    ? t('ai_providers.openai_edit_modal_models_label')
-                    : t('ai_providers.openai_add_modal_models_label')}
-                </label>
+                <HintLabel
+                  className={styles.modelConfigTitle}
+                  label={
+                    hasIndexParam
+                      ? t('ai_providers.openai_edit_modal_models_label')
+                      : t('ai_providers.openai_add_modal_models_label')
+                  }
+                  hint={t('ai_providers.openai_models_hint')}
+                />
                 <div className={styles.modelConfigToolbar}>
                   <Button
                     variant="secondary"
@@ -611,9 +618,6 @@ export function AiProvidersOpenAIEditPage() {
                   </Button>
                 </div>
               </div>
-
-              {/* 提示文本 */}
-              <div className={styles.sectionHint}>{t('ai_providers.openai_models_hint')}</div>
 
               {/* 模型列表 */}
               <ModelInputList
@@ -684,9 +688,28 @@ export function AiProvidersOpenAIEditPage() {
             </div>
 
             <div className={styles.keyEntriesSection}>
-              <div className={styles.keyEntriesHeader}>
-                <label className={styles.keyEntriesTitle}>{t('ai_providers.openai_add_modal_keys_label')}</label>
-                <span className={styles.keyEntriesHint}>{t('ai_providers.openai_keys_hint')}</span>
+              <div className={styles.modelConfigHeader}>
+                <HintLabel
+                  className={styles.modelConfigTitle}
+                  label={t('ai_providers.openai_add_modal_keys_label')}
+                  hint={t('ai_providers.openai_keys_hint')}
+                />
+                <div className={styles.modelConfigToolbar}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      const current = form.apiKeyEntries.length ? form.apiKeyEntries : [buildApiKeyEntry()];
+                      setForm((prev) => ({ ...prev, apiKeyEntries: [...current, buildApiKeyEntry()] }));
+                      resetDraftKeyTestStatuses(current.length + 1);
+                      setTestStatus('idle');
+                      setTestMessage('');
+                    }}
+                    disabled={saving || disableControls || isTestingKeys}
+                  >
+                    {t('ai_providers.openai_keys_add_btn')}
+                  </Button>
+                </div>
               </div>
               {renderKeyEntries(form.apiKeyEntries)}
             </div>

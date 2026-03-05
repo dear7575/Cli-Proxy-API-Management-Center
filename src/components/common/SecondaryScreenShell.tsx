@@ -8,6 +8,7 @@ import styles from './SecondaryScreenShell.module.scss';
 
 export type SecondaryScreenShellProps = {
   title: ReactNode;
+  titleAlign?: 'center' | 'left';
   onBack?: () => void;
   backLabel?: string;
   backAriaLabel?: string;
@@ -26,6 +27,7 @@ export const SecondaryScreenShell = forwardRef<HTMLDivElement, SecondaryScreenSh
   function SecondaryScreenShell(
     {
       title,
+      titleAlign = 'center',
       onBack,
       backLabel = 'Back',
       backAriaLabel,
@@ -50,6 +52,12 @@ export const SecondaryScreenShell = forwardRef<HTMLDivElement, SecondaryScreenSh
       .filter(Boolean)
       .join(' ');
     const titleTooltip = typeof title === 'string' ? title : undefined;
+    const topBarClassName =
+      titleAlign === 'left' ? `${styles.topBar} ${styles.topBarTitleLeft}` : styles.topBar;
+    const topBarTitleClassName =
+      titleAlign === 'left'
+        ? `${styles.topBarTitle} ${styles.topBarTitleLeftAligned}`
+        : styles.topBarTitle;
     const resolvedBackAriaLabel = backAriaLabel ?? backLabel;
     const pageTransitionLayer = usePageTransitionLayer();
     const isCurrentLayer = pageTransitionLayer ? pageTransitionLayer.status === 'current' : true;
@@ -87,7 +95,7 @@ export const SecondaryScreenShell = forwardRef<HTMLDivElement, SecondaryScreenSh
     return (
       <>
         <div className={containerClassName} ref={ref}>
-          <div className={styles.topBar}>
+          <div className={topBarClassName}>
             {onBack && !hideTopBarBackButton ? (
               <Button
                 variant="ghost"
@@ -104,7 +112,7 @@ export const SecondaryScreenShell = forwardRef<HTMLDivElement, SecondaryScreenSh
             ) : (
               <div />
             )}
-            <div className={styles.topBarTitle} title={titleTooltip}>
+            <div className={topBarTitleClassName} title={titleTooltip}>
               {title}
             </div>
             <div className={styles.rightSlot}>{hideTopBarRightAction ? null : rightAction}</div>

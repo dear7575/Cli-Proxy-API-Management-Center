@@ -125,12 +125,17 @@ export function OAuthModelAliasCard(props: OAuthModelAliasCardProps) {
       ) : Object.keys(modelAlias).length === 0 ? (
         <EmptyState title={t('oauth_model_alias.list_empty_all')} />
       ) : (
-        <div className={styles.excludedList}>
+        <div className={`${styles.excludedList} ${styles.excludedListTwoCol}`}>
           {Object.entries(modelAlias).map(([provider, mappings]) => (
-            <div key={provider} className={styles.excludedItem}>
+            <div key={provider} className={`${styles.excludedItem} ${styles.excludedItemGrid}`}>
               <div className={styles.excludedInfo}>
                 <div className={styles.excludedProviderRow}>
-                  <div className={styles.excludedProvider}>{provider}</div>
+                  <div className={styles.excludedProvider}>
+                    <span>{provider}</span>
+                    <span className={styles.aliasCountInline}>
+                      {t('oauth_model_alias.model_count', { count: mappings.length })}
+                    </span>
+                  </div>
                 </div>
                 {mappings?.length ? (
                   <div className={styles.aliasMappingChips}>
@@ -140,8 +145,13 @@ export function OAuthModelAliasCard(props: OAuthModelAliasCardProps) {
                         className={styles.aliasMappingChip}
                         title={`${mapping.name} -> ${mapping.alias}`}
                       >
-                        <span className={styles.aliasSource}>{mapping.name}</span>
-                        <span className={styles.aliasTarget}>{mapping.alias}</span>
+                        <span className={styles.aliasSourcePill} title={mapping.name}>
+                          {mapping.name}
+                        </span>
+                        <span className={styles.aliasArrow} aria-hidden="true">→</span>
+                        <span className={styles.aliasTargetPill} title={mapping.alias}>
+                          {mapping.alias}
+                        </span>
                         {mapping.fork && (
                           <span className={styles.aliasForkBadge}>
                             {t('oauth_model_alias.alias_fork_label')}

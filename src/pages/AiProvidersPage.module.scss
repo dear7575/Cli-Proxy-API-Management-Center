@@ -716,21 +716,70 @@
 // ============================================
 
 .openaiEditForm {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
   gap: $spacing-md;
 
   :global(.form-group) {
     margin-bottom: 0;
   }
 
+  :global(.header-kv-list) {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    gap: $spacing-sm;
+    align-items: start;
+  }
+
+  :global(.header-kv-list > .header-input-row) {
+    min-width: 0;
+  }
+
+  :global(.header-kv-list > .align-start) {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
   .modelConfigSection {
+    grid-column: 1 / -1;
     margin-bottom: 0;
   }
 
+  .compactConfigSection {
+    grid-column: auto;
+  }
+
+  .upstreamApiKeyRow,
+  .keyEntriesSection,
   :global(.status-badge) {
-    margin-bottom: 0;
+    grid-column: 1 / -1;
+  }
+
+  :global(.status-badge) {
     align-self: flex-start;
+    margin-bottom: 0;
+  }
+
+  @media (max-width: 1360px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 1500px) {
+    :global(.header-kv-list) {
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    }
+  }
+
+  @media (max-width: 1100px) {
+    :global(.header-kv-list) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  @include mobile {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -850,6 +899,10 @@
   box-shadow: 0 10px 20px -22px rgba(2, 6, 23, 0.6);
 }
 
+.compactConfigSection {
+  grid-column: auto;
+}
+
 .modelConfigHeader {
   display: flex;
   align-items: center;
@@ -887,7 +940,27 @@
 }
 
 .modelInputList {
-  gap: $spacing-xs;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: $spacing-sm;
+  align-items: start;
+}
+
+.modelInputList > :global(.align-start) {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+@media (max-width: 1500px) {
+  .modelInputList {
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .modelInputList {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .modelInputRow {
@@ -921,6 +994,57 @@
 
 .modelRowRemoveButton {
   justify-self: center;
+}
+
+.excludedModelsInput {
+  min-height: 104px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.excludedModelsCount {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: $radius-full;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--warning-text, #92400e);
+  background: color-mix(in srgb, var(--warning-bg, #fef3c7) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warning-border, #fbbf24) 70%, transparent);
+  white-space: nowrap;
+}
+
+.excludedModelsPreviewList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 0 0;
+}
+
+.cloakInlineRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
+  gap: $spacing-md;
+  align-items: start;
+
+  @include mobile {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.cloakInlineField {
+  margin-bottom: 0;
+}
+
+.cloakSensitivePanel {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+  padding: 10px;
+  border-radius: $radius-md;
+  border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 68%, transparent);
 }
 
 .modelTestPanel {

@@ -7,6 +7,7 @@ interface HeaderInputListProps {
   entries: HeaderEntry[];
   onChange: (entries: HeaderEntry[]) => void;
   addLabel: string;
+  hideAddButton?: boolean;
   disabled?: boolean;
   keyPlaceholder?: string;
   valuePlaceholder?: string;
@@ -18,6 +19,7 @@ export function HeaderInputList({
   entries,
   onChange,
   addLabel,
+  hideAddButton = false,
   disabled = false,
   keyPlaceholder = 'X-Custom-Header',
   valuePlaceholder = 'value',
@@ -41,7 +43,7 @@ export function HeaderInputList({
   };
 
   return (
-    <div className="header-input-list">
+    <div className="header-input-list header-kv-list">
       {currentEntries.map((entry, index) => (
         <Fragment key={index}>
           <div className="header-input-row">
@@ -73,9 +75,11 @@ export function HeaderInputList({
           </div>
         </Fragment>
       ))}
-      <Button variant="secondary" size="sm" onClick={addEntry} disabled={disabled} className="align-start">
-        {addLabel}
-      </Button>
+      {!hideAddButton && (
+        <Button variant="secondary" size="sm" onClick={addEntry} disabled={disabled} className="align-start">
+          {addLabel}
+        </Button>
+      )}
     </div>
   );
 }

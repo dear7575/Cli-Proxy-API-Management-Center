@@ -29,38 +29,84 @@
 }
 
 .dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  z-index: 1000;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  max-height: 200px;
+  z-index: 3200;
+  padding: 6px;
+  background: color-mix(in srgb, var(--bg-primary) 96%, var(--bg-secondary) 4%);
+  border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
+  border-radius: 10px;
+  max-height: min(360px, calc(100vh - 24px));
   overflow-y: auto;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 16px 32px -26px rgba(2, 6, 23, 0.78);
+}
+
+.dropdownTop {
+  transform-origin: bottom center;
+}
+
+.dropdown::-webkit-scrollbar {
+  width: 8px;
+}
+
+.dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dropdown::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--border-color) 82%, transparent);
+  border-radius: 999px;
+}
+
+.dropdown::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--border-hover) 86%, var(--border-color));
 }
 
 .option {
-  padding: 8px 12px;
+  position: relative;
+  padding: 9px 12px;
   cursor: pointer;
   background-color: transparent;
   color: var(--text-primary);
   display: flex;
   flex-direction: column;
-  font-size: 0.9rem;
+  font-size: 13px;
+  line-height: 1.35;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+
+  & + .option {
+    margin-top: 2px;
+  }
+
+  &:hover {
+    background-color: color-mix(in srgb, var(--bg-secondary) 76%, transparent);
+    border-color: color-mix(in srgb, var(--border-color) 82%, transparent);
+  }
 }
 
 .optionActive {
-  background-color: var(--bg-tertiary);
+  background-color: color-mix(in srgb, var(--primary-color) 10%, var(--bg-secondary));
+  border-color: color-mix(in srgb, var(--primary-color) 44%, var(--border-color));
+}
+
+.optionSelected {
+  background-color: color-mix(in srgb, var(--primary-color) 7%, var(--bg-primary));
+
+  .optionValue {
+    color: color-mix(in srgb, var(--text-primary) 82%, var(--primary-color) 18%);
+  }
 }
 
 .optionValue {
-  font-weight: 500;
+  font-weight: 600;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .optionLabel {
-  font-size: 0.85em;
+  margin-top: 2px;
+  font-size: 12px;
   color: var(--text-secondary);
+  white-space: normal;
+  word-break: break-word;
 }

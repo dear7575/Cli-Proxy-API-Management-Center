@@ -51,6 +51,8 @@ const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [10, 20, 30] as const;
 
 type PaginationItem = number | 'left-ellipsis' | 'right-ellipsis';
+type StatsSortKey = 'success' | 'failure';
+type StatsSortDirection = 'desc' | 'asc';
 
 export function AuthFilesPage() {
   const { t } = useTranslation();
@@ -64,6 +66,7 @@ export function AuthFilesPage() {
   const [filter, setFilter] = useState<'all' | string>('all');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
+  const [statsSort, setStatsSort] = useState<{ key: StatsSortKey; direction: StatsSortDirection } | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -209,7 +212,7 @@ export function AuthFilesPage() {
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
 
-    return files.filter((item) => {
+    const filteredItems = files.filter((item) => {
       const matchType = filter === 'all' || item.type === filter;
       const matchStatus =
         statusFilter === 'all' ||
@@ -222,7 +225,39 @@ export function AuthFilesPage() {
 
       return matchType && matchStatus && matchSearch;
     });
-  }, [files, filter, search, statusFilter]);
+
+    if (!statsSort) return filteredItems;
+
+    return [...filteredItems].sort((left, right) => {
+      const leftStats = resolveAuthFileStats(left, keyStats);
+      const rightStats = resolveAuthFileStats(right, keyStats);
+      const delta =
+        statsSort.key === 'success'
+          ? leftStats.success - rightStats.success
+          : leftStats.failure - rightStats.failure;
+      if (delta !== 0) {
+        return statsSort.direction === 'asc' ? delta : -delta;
+      }
+      return left.name.localeCompare(right.name);
+    });
+  }, [files, filter, keyStats, search, statsSort, statusFilter]);
+
+  const toggleStatsSort = useCallback((key: StatsSortKey) => {
+    setStatsSort((prev) => {
+      if (!prev || prev.key !== key) {
+        return { key, direction: 'desc' };
+      }
+      return { key, direction: prev.direction === 'desc' ? 'asc' : 'desc' };
+    });
+  }, []);
+
+  const getStatsSortLabel = useCallback(
+    (key: StatsSortKey, label: string) => {
+      if (!statsSort || statsSort.key !== key) return label;
+      return `${label}${statsSort.direction === 'desc' ? ' ▼' : ' ▲'}`;
+    },
+    [statsSort]
+  );
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -563,8 +598,24 @@ export function AuthFilesPage() {
                   <th className={styles.authTableColType}>{t('auth_files.file_type', { defaultValue: '类型' })}</th>
                   <th className={styles.authTableColSize}>{t('auth_files.file_size')}</th>
                   <th className={styles.authTableColModified}>{t('auth_files.file_modified')}</th>
-                  <th>{t('stats.success')}</th>
-                  <th>{t('stats.failure')}</th>
+                  <th aria-sort={statsSort?.key === 'success' ? (statsSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                    <button
+                      type="button"
+                      className={styles.authTableSortButton}
+                      onClick={() => toggleStatsSort('success')}
+                    >
+                      {getStatsSortLabel('success', t('stats.success'))}
+                    </button>
+                  </th>
+                  <th aria-sort={statsSort?.key === 'failure' ? (statsSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                    <button
+                      type="button"
+                      className={styles.authTableSortButton}
+                      onClick={() => toggleStatsSort('failure')}
+                    >
+                      {getStatsSortLabel('failure', t('stats.failure'))}
+                    </button>
+                  </th>
                   <th className={styles.authTableColHealth}>{t('auth_files.health_status_label')}</th>
                   <th>{t('auth_files.status_toggle_label')}</th>
                   <th className="provider-table-col-actions">{t('common.action')}</th>

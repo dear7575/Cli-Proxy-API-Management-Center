@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { HintLabel } from '@/components/ui/HintLabel';
 import { useNotificationStore, useThemeStore } from '@/stores';
 import { oauthApi, type OAuthProvider, type IFlowCookieAuthResponse } from '@/services/api/oauth';
 import { vertexApi, type VertexImportResponse } from '@/services/api/vertex';
@@ -355,7 +356,11 @@ export function OAuthPage() {
                       alt=""
                       className={styles.cardTitleIcon}
                     />
-                    {t(provider.titleKey)}
+                    <HintLabel
+                      className={styles.cardTitleHint}
+                      label={<span className={styles.cardTitleText}>{t(provider.titleKey)}</span>}
+                      hint={t(provider.hintKey)}
+                    />
                   </span>
                 }
                 extra={
@@ -365,12 +370,15 @@ export function OAuthPage() {
                 }
               >
                 <div className={styles.cardContent}>
-                  <div className={styles.cardHint}>{t(provider.hintKey)}</div>
                   {provider.id === 'gemini-cli' && (
                     <div className={styles.geminiProjectField}>
                       <Input
-                        label={t('auth_login.gemini_cli_project_id_label')}
-                        hint={t('auth_login.gemini_cli_project_id_hint')}
+                        label={
+                          <HintLabel
+                            label={t('auth_login.gemini_cli_project_id_label')}
+                            hint={t('auth_login.gemini_cli_project_id_hint')}
+                          />
+                        }
                         value={state.projectId || ''}
                         error={state.projectIdError}
                         disabled={Boolean(state.polling)}
@@ -405,8 +413,12 @@ export function OAuthPage() {
                   {canSubmitCallback && (
                     <div className={styles.callbackSection}>
                       <Input
-                        label={t('auth_login.oauth_callback_label')}
-                        hint={t('auth_login.oauth_callback_hint')}
+                        label={
+                          <HintLabel
+                            label={t('auth_login.oauth_callback_label')}
+                            hint={t('auth_login.oauth_callback_hint')}
+                          />
+                        }
                         value={state.callbackUrl || ''}
                         onChange={(e) =>
                           updateProviderState(provider.id, {
@@ -459,7 +471,11 @@ export function OAuthPage() {
           title={
             <span className={styles.cardTitle}>
               <img src={iconVertex} alt="" className={styles.cardTitleIcon} />
-              {t('vertex_import.title')}
+              <HintLabel
+                className={styles.cardTitleHint}
+                label={<span className={styles.cardTitleText}>{t('vertex_import.title')}</span>}
+                hint={t('vertex_import.description')}
+              />
             </span>
           }
           extra={
@@ -469,10 +485,13 @@ export function OAuthPage() {
           }
         >
           <div className={styles.cardContent}>
-            <div className={styles.cardHint}>{t('vertex_import.description')}</div>
             <Input
-              label={t('vertex_import.location_label')}
-              hint={t('vertex_import.location_hint')}
+              label={
+                <HintLabel
+                  label={t('vertex_import.location_label')}
+                  hint={t('vertex_import.location_hint')}
+                />
+              }
               value={vertexState.location}
               onChange={(e) =>
                 setVertexState((prev) => ({
@@ -483,7 +502,12 @@ export function OAuthPage() {
               placeholder={t('vertex_import.location_placeholder')}
             />
             <div className={styles.formItem}>
-              <label className={styles.formItemLabel}>{t('vertex_import.file_label')}</label>
+              <div className={styles.formItemLabel}>
+                <HintLabel
+                  label={t('vertex_import.file_label')}
+                  hint={t('vertex_import.file_hint')}
+                />
+              </div>
               <div className={styles.filePicker}>
                 <Button variant="secondary" size="sm" onClick={handleVertexFilePick}>
                   {t('vertex_import.choose_file')}
@@ -496,7 +520,6 @@ export function OAuthPage() {
                   {vertexState.fileName || t('vertex_import.file_placeholder')}
                 </div>
               </div>
-              <div className={styles.cardHintSecondary}>{t('vertex_import.file_hint')}</div>
               <input
                 ref={vertexFileInputRef}
                 type="file"
@@ -549,7 +572,11 @@ export function OAuthPage() {
           title={
             <span className={styles.cardTitle}>
               <img src={iconIflow} alt="" className={styles.cardTitleIcon} />
-              {t('auth_login.iflow_cookie_title')}
+              <HintLabel
+                className={styles.cardTitleHint}
+                label={<span className={styles.cardTitleText}>{t('auth_login.iflow_cookie_title')}</span>}
+                hint={t('auth_login.iflow_cookie_hint')}
+              />
             </span>
           }
           extra={
@@ -559,18 +586,17 @@ export function OAuthPage() {
           }
         >
           <div className={styles.cardContent}>
-            <div className={styles.cardHint}>{t('auth_login.iflow_cookie_hint')}</div>
-            <div className={styles.cardHintSecondary}>
-              {t('auth_login.iflow_cookie_key_hint')}
-            </div>
-            <div className={styles.formItem}>
-              <label className={styles.formItemLabel}>{t('auth_login.iflow_cookie_label')}</label>
-              <Input
-                value={iflowCookie.cookie}
-                onChange={(e) => setIflowCookie((prev) => ({ ...prev, cookie: e.target.value }))}
-                placeholder={t('auth_login.iflow_cookie_placeholder')}
-              />
-            </div>
+            <Input
+              label={
+                <HintLabel
+                  label={t('auth_login.iflow_cookie_label')}
+                  hint={t('auth_login.iflow_cookie_key_hint')}
+                />
+              }
+              value={iflowCookie.cookie}
+              onChange={(e) => setIflowCookie((prev) => ({ ...prev, cookie: e.target.value }))}
+              placeholder={t('auth_login.iflow_cookie_placeholder')}
+            />
             {iflowCookie.error && (
               <div
                 className={`status-badge ${iflowCookie.errorType === 'warning' ? 'warning' : 'error'}`}

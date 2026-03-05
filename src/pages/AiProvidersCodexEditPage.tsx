@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { HeaderInputList } from '@/components/ui/HeaderInputList';
+import { HintLabel } from '@/components/ui/HintLabel';
 import { ModelInputList } from '@/components/ui/ModelInputList';
 import { Modal } from '@/components/ui/Modal';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
@@ -410,6 +411,18 @@ export function AiProvidersCodexEditPage() {
     Boolean((form.baseUrl ?? '').trim());
   const canApplyModelDiscovery = !disableControls && !saving && !modelDiscoveryFetching;
   const selectedCount = modelDiscoverySelected.size;
+  const excludedModelsPreview = useMemo(() => {
+    const seen = new Set<string>();
+    return parseExcludedModels(form.excludedText).reduce<string[]>((acc, item) => {
+      const value = item.trim();
+      if (!value) return acc;
+      const key = value.toLowerCase();
+      if (seen.has(key)) return acc;
+      seen.add(key);
+      acc.push(value);
+      return acc;
+    }, []);
+  }, [form.excludedText]);
 
   const handleSelectAllDiscovered = () => {
     if (!discoveredModelsFiltered.length) return;
@@ -476,8 +489,7 @@ export function AiProvidersCodexEditPage() {
               disabled={disableControls || saving}
             />
             <Input
-              label={t('ai_providers.priority_label')}
-              hint={t('ai_providers.priority_hint')}
+              label={<HintLabel label={t('ai_providers.priority_label')} hint={t('ai_providers.priority_hint')} />}
               type="number"
               step={1}
               value={form.priority ?? ''}
@@ -492,11 +504,10 @@ export function AiProvidersCodexEditPage() {
               disabled={disableControls || saving}
             />
             <Input
-              label={t('ai_providers.prefix_label')}
+              label={<HintLabel label={t('ai_providers.prefix_label')} hint={t('ai_providers.prefix_hint')} />}
               placeholder={t('ai_providers.prefix_placeholder')}
               value={form.prefix ?? ''}
               onChange={(e) => setForm((prev) => ({ ...prev, prefix: e.target.value }))}
-              hint={t('ai_providers.prefix_hint')}
               disabled={disableControls || saving}
             />
             <Input
@@ -505,9 +516,13 @@ export function AiProvidersCodexEditPage() {
               onChange={(e) => setForm((prev) => ({ ...prev, baseUrl: e.target.value }))}
               disabled={disableControls || saving}
             />
-            <div className={styles.modelConfigSection}>
+            <div className={`${styles.modelConfigSection} ${styles.compactConfigSection}`}>
               <div className={styles.modelConfigHeader}>
-                <label className={styles.modelConfigTitle}>{t('ai_providers.codex_websockets_label')}</label>
+                <HintLabel
+                  className={styles.modelConfigTitle}
+                  label={t('ai_providers.codex_websockets_label')}
+                  hint={t('ai_providers.codex_websockets_hint')}
+                />
               </div>
               <ToggleSwitch
                 checked={Boolean(form.websockets)}
@@ -515,7 +530,6 @@ export function AiProvidersCodexEditPage() {
                 disabled={disableControls || saving}
                 ariaLabel={t('ai_providers.codex_websockets_label')}
               />
-              <div className={styles.sectionHint}>{t('ai_providers.codex_websockets_hint')}</div>
             </div>
             <Input
               label={t('ai_providers.codex_add_modal_proxy_label')}
@@ -523,20 +537,49 @@ export function AiProvidersCodexEditPage() {
               onChange={(e) => setForm((prev) => ({ ...prev, proxyUrl: e.target.value }))}
               disabled={disableControls || saving}
             />
-            <HeaderInputList
-              entries={form.headers}
-              onChange={(entries) => setForm((prev) => ({ ...prev, headers: entries }))}
-              addLabel={t('common.custom_headers_add')}
-              keyPlaceholder={t('common.custom_headers_key_placeholder')}
-              valuePlaceholder={t('common.custom_headers_value_placeholder')}
-              removeButtonTitle={t('common.delete')}
-              removeButtonAriaLabel={t('common.delete')}
-              disabled={disableControls || saving}
-            />
+            <div className={styles.modelConfigSection}>
+              <div className={styles.modelConfigHeader}>
+                <HintLabel
+                  className={styles.modelConfigTitle}
+                  label={t('common.custom_headers_label')}
+                  hint={t('common.custom_headers_hint')}
+                />
+                <div className={styles.modelConfigToolbar}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        headers: [...(prev.headers.length ? prev.headers : [{ key: '', value: '' }]), { key: '', value: '' }],
+                      }))
+                    }
+                    disabled={disableControls || saving}
+                  >
+                    {t('common.custom_headers_add')}
+                  </Button>
+                </div>
+              </div>
+              <HeaderInputList
+                entries={form.headers}
+                onChange={(entries) => setForm((prev) => ({ ...prev, headers: entries }))}
+                addLabel={t('common.custom_headers_add')}
+                keyPlaceholder={t('common.custom_headers_key_placeholder')}
+                valuePlaceholder={t('common.custom_headers_value_placeholder')}
+                removeButtonTitle={t('common.delete')}
+                removeButtonAriaLabel={t('common.delete')}
+                disabled={disableControls || saving}
+                hideAddButton
+              />
+            </div>
 
             <div className={styles.modelConfigSection}>
               <div className={styles.modelConfigHeader}>
-                <label className={styles.modelConfigTitle}>{t('ai_providers.codex_models_label')}</label>
+                <HintLabel
+                  className={styles.modelConfigTitle}
+                  label={t('ai_providers.codex_models_label')}
+                  hint={t('ai_providers.codex_models_hint')}
+                />
                 <div className={styles.modelConfigToolbar}>
                   <Button
                     variant="secondary"
@@ -561,7 +604,6 @@ export function AiProvidersCodexEditPage() {
                   </Button>
                 </div>
               </div>
-              <div className={styles.sectionHint}>{t('ai_providers.codex_models_hint')}</div>
 
               <ModelInputList
                 entries={form.modelEntries}
@@ -580,17 +622,34 @@ export function AiProvidersCodexEditPage() {
             </div>
             <div className={styles.modelConfigSection}>
               <div className={styles.modelConfigHeader}>
-                <label className={styles.modelConfigTitle}>{t('ai_providers.excluded_models_label')}</label>
+                <HintLabel
+                  className={styles.modelConfigTitle}
+                  label={t('ai_providers.excluded_models_label')}
+                  hint={t('ai_providers.excluded_models_hint')}
+                />
+                <div className={styles.modelConfigToolbar}>
+                  <span className={styles.excludedModelsCount}>
+                    {t('ai_providers.excluded_models_count', { count: excludedModelsPreview.length })}
+                  </span>
+                </div>
               </div>
               <textarea
-                className="input"
+                className={`input ${styles.excludedModelsInput}`}
                 placeholder={t('ai_providers.excluded_models_placeholder')}
                 value={form.excludedText}
                 onChange={(e) => setForm((prev) => ({ ...prev, excludedText: e.target.value }))}
                 rows={4}
                 disabled={disableControls || saving}
               />
-              <div className={styles.sectionHint}>{t('ai_providers.excluded_models_hint')}</div>
+              {excludedModelsPreview.length > 0 ? (
+                <div className={styles.excludedModelsPreviewList}>
+                  {excludedModelsPreview.map((model) => (
+                    <span key={model} className={`${styles.modelTag} ${styles.excludedModelTag}`}>
+                      {model}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </div>
 
             <Modal

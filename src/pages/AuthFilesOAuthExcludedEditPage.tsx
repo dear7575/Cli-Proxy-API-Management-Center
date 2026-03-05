@@ -4,15 +4,15 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { AutocompleteInput } from '@/components/ui/AutocompleteInput';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { IconInfo } from '@/components/ui/icons';
+import { HintLabel } from '@/components/ui/HintLabel';
 import { SecondaryScreenShell } from '@/components/common/SecondaryScreenShell';
 import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
 import { useAuthStore, useNotificationStore } from '@/stores';
 import { authFilesApi } from '@/services/api';
 import type { AuthFileItem, OAuthModelAliasEntry } from '@/types';
 import styles from './AuthFilesOAuthExcludedEditPage.module.scss';
+import layoutStyles from './AiProvidersEditLayout.module.scss';
 
 type AuthFileModelItem = { id: string; display_name?: string; type?: string; owned_by?: string };
 
@@ -53,6 +53,7 @@ export function AuthFilesOAuthExcludedEditPage() {
   const [excludedUnsupported, setExcludedUnsupported] = useState(false);
 
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
+  const [modelKeyword, setModelKeyword] = useState('');
   const [modelsList, setModelsList] = useState<AuthFileModelItem[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState<'unsupported' | null>(null);
@@ -84,8 +85,13 @@ export function AuthFilesOAuthExcludedEditPage() {
       .filter((value) => !baseSet.has(value.toLowerCase()))
       .sort((a, b) => a.localeCompare(b));
 
-    return [...OAUTH_PROVIDER_PRESETS, ...extraList];
-  }, [excluded, files, modelAlias]);
+    const merged = [...OAUTH_PROVIDER_PRESETS, ...extraList];
+    const currentProvider = provider.trim();
+    if (currentProvider && !merged.some((value) => value.toLowerCase() === currentProvider.toLowerCase())) {
+      merged.unshift(currentProvider);
+    }
+    return merged;
+  }, [excluded, files, modelAlias, provider]);
 
   const getTypeLabel = useCallback(
     (type: string): string => {
@@ -268,6 +274,37 @@ export function AuthFilesOAuthExcludedEditPage() {
     });
   }, []);
 
+  const filteredModels = useMemo(() => {
+    const keyword = modelKeyword.trim().toLowerCase();
+    if (!keyword) return modelsList;
+    return modelsList.filter((model) => {
+      const id = String(model.id ?? '').toLowerCase();
+      const displayName = String(model.display_name ?? '').toLowerCase();
+      return id.includes(keyword) || displayName.includes(keyword);
+    });
+  }, [modelKeyword, modelsList]);
+
+  const selectedVisibleCount = useMemo(
+    () => filteredModels.reduce((count, model) => (selectedModels.has(model.id) ? count + 1 : count), 0),
+    [filteredModels, selectedModels]
+  );
+
+  const selectVisibleModels = useCallback(() => {
+    setSelectedModels((prev) => {
+      const next = new Set(prev);
+      filteredModels.forEach((model) => next.add(model.id));
+      return next;
+    });
+  }, [filteredModels]);
+
+  const clearVisibleModels = useCallback(() => {
+    setSelectedModels((prev) => {
+      const next = new Set(prev);
+      filteredModels.forEach((model) => next.delete(model.id));
+      return next;
+    });
+  }, [filteredModels]);
+
   const handleSave = useCallback(async () => {
     const normalizedProvider = normalizeProviderKey(provider);
     if (!normalizedProvider) {
@@ -303,10 +340,28 @@ export function AuthFilesOAuthExcludedEditPage() {
       backLabel={t('common.back')}
       backAriaLabel={t('common.back')}
       contentClassName={styles.pageContent}
-      rightAction={
-        <Button size="sm" onClick={handleSave} loading={saving} disabled={!canSave}>
-          {t('oauth_excluded.save')}
-        </Button>
+      hideTopBarBackButton
+      hideTopBarRightAction
+      floatingAction={
+        <div className={layoutStyles.floatingActions}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleBack}
+            className={layoutStyles.floatingBackButton}
+          >
+            {t('common.back')}
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => void handleSave()}
+            loading={saving}
+            disabled={!canSave}
+            className={layoutStyles.floatingSaveButton}
+          >
+            {t('common.save')}
+          </Button>
+        </div>
       }
       isLoading={initialLoading}
       loadingLabel={t('common.loading')}
@@ -322,72 +377,75 @@ export function AuthFilesOAuthExcludedEditPage() {
         <>
           <Card className={styles.settingsCard}>
             <div className={styles.settingsHeader}>
-              <div className={styles.settingsHeaderTitle}>
-                <IconInfo size={16} />
-                <span>{t('oauth_excluded.title')}</span>
-              </div>
-              <div className={styles.settingsHeaderHint}>{t('oauth_excluded.description')}</div>
+              <HintLabel
+                className={styles.settingsHeaderTitle}
+                label={t('oauth_excluded.title')}
+                hint={t('oauth_excluded.description')}
+              />
             </div>
 
             <div className={styles.settingsSection}>
-              <div className={styles.settingsRow}>
-                <div className={styles.settingsInfo}>
-                  <div className={styles.settingsLabel}>{t('oauth_excluded.provider_label')}</div>
-                  <div className={styles.settingsDesc}>{t('oauth_excluded.provider_hint')}</div>
-                </div>
-                <div className={styles.settingsControl}>
-                  <AutocompleteInput
-                    id="oauth-excluded-provider"
-                    placeholder={t('oauth_excluded.provider_placeholder')}
-                    value={provider}
-                    onChange={updateProvider}
-                    options={providerOptions}
-                    disabled={disableControls || saving}
-                    wrapperStyle={{ marginBottom: 0 }}
-                  />
-                </div>
+              <div className={styles.providerChooserHeader}>
+                <div className={styles.settingsLabel}>{t('oauth_excluded.provider_label')}</div>
+                {provider.trim() ? (
+                  <span className={styles.providerCurrentBadge}>
+                    {t('oauth_excluded.provider_label')}: {getTypeLabel(provider.trim())}
+                  </span>
+                ) : null}
               </div>
 
-              {providerOptions.length > 0 && (
-                <div className={styles.tagList}>
+              {providerOptions.length > 0 ? (
+                <div className={styles.providerCardGrid}>
                   {providerOptions.map((option) => {
                     const isActive = normalizeProviderKey(provider) === option.toLowerCase();
                     return (
                       <button
                         key={option}
                         type="button"
-                        className={`${styles.tag} ${isActive ? styles.tagActive : ''}`}
+                        className={`${styles.providerCard} ${isActive ? styles.providerCardActive : ''}`}
                         onClick={() => updateProvider(option)}
                         disabled={disableControls || saving}
                       >
-                        {getTypeLabel(option)}
+                        <span className={styles.providerCardTitle}>{getTypeLabel(option)}</span>
+                        <span className={styles.providerCardMeta}>{option}</span>
                       </button>
                     );
                   })}
                 </div>
-              )}
+              ) : null}
+
             </div>
           </Card>
 
           <Card className={styles.settingsCard}>
-            <div className={styles.settingsHeader}>
+            <div className={`${styles.settingsHeader} ${styles.modelsHeader}`}>
               <div className={styles.settingsHeaderTitle}>{t('oauth_excluded.models_label')}</div>
-              {resolvedProviderKey && (
-                <div className={styles.modelsHint}>
+              <div className={styles.modelsHeaderMeta}>
+                {resolvedProviderKey ? (
+                  <span
+                    className={`${styles.modelsStatusBadge} ${
+                      modelsError === 'unsupported'
+                        ? styles.modelsStatusBadgeWarning
+                        : modelsLoading
+                          ? styles.modelsStatusBadgeLoading
+                          : styles.modelsStatusBadgeSuccess
+                    }`}
+                  >
                   {modelsLoading ? (
-                    <>
-                      <LoadingSpinner size={14} />
-                      <span>{t('oauth_excluded.models_loading')}</span>
-                    </>
+                    t('oauth_excluded.models_loading')
                   ) : modelsError === 'unsupported' ? (
-                    <span>{t('oauth_excluded.models_unsupported')}</span>
+                    t('oauth_excluded.models_unsupported')
                   ) : modelsList.length > 0 ? (
-                    <span>{t('oauth_excluded.models_loaded', { count: modelsList.length })}</span>
+                    t('oauth_excluded.models_loaded', { count: modelsList.length })
                   ) : (
-                    <span>{t('oauth_excluded.no_models_available')}</span>
+                    t('oauth_excluded.no_models_available')
                   )}
-                </div>
-              )}
+                  </span>
+                ) : null}
+                <span className={styles.modelsSelectedBadge}>
+                  {t('oauth_excluded.models_selected_count', { count: selectedModels.size })}
+                </span>
+              </div>
             </div>
 
             {modelsLoading ? (
@@ -396,26 +454,62 @@ export function AuthFilesOAuthExcludedEditPage() {
                 <span>{t('common.loading')}</span>
               </div>
             ) : modelsList.length > 0 ? (
-              <div className={styles.modelList}>
-                {modelsList.map((model) => {
-                  const checked = selectedModels.has(model.id);
-                  return (
-                    <label key={model.id} className={styles.modelItem}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        disabled={disableControls || saving}
-                        onChange={(event) => toggleModel(model.id, event.target.checked)}
-                      />
-                      <span className={styles.modelText}>
-                        <span className={styles.modelId}>{model.id}</span>
-                        {model.display_name && model.display_name !== model.id && (
-                          <span className={styles.modelDisplayName}>{model.display_name}</span>
-                        )}
-                      </span>
-                    </label>
-                  );
-                })}
+              <div className={styles.modelsPanel}>
+                <div className={styles.modelsToolbar}>
+                  <div className={styles.modelsSearch}>
+                    <input
+                      className={`input ${styles.modelsSearchInput}`}
+                      placeholder={t('oauth_excluded.models_search_placeholder')}
+                      value={modelKeyword}
+                      onChange={(event) => setModelKeyword(event.target.value)}
+                      disabled={disableControls || saving}
+                    />
+                  </div>
+                  <div className={styles.modelsToolbarActions}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={selectVisibleModels}
+                      disabled={disableControls || saving || filteredModels.length === 0}
+                    >
+                      {t('oauth_excluded.models_select_visible')}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={clearVisibleModels}
+                      disabled={disableControls || saving || selectedVisibleCount === 0}
+                    >
+                      {t('oauth_excluded.models_clear_visible')}
+                    </Button>
+                  </div>
+                </div>
+
+                {filteredModels.length > 0 ? (
+                  <div className={styles.modelList}>
+                    {filteredModels.map((model) => {
+                      const checked = selectedModels.has(model.id);
+                      return (
+                        <label key={model.id} className={`${styles.modelItem} ${checked ? styles.modelItemChecked : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={disableControls || saving}
+                            onChange={(event) => toggleModel(model.id, event.target.checked)}
+                          />
+                          <span className={styles.modelText}>
+                            <span className={styles.modelId}>{model.id}</span>
+                            {model.display_name && model.display_name !== model.id && (
+                              <span className={styles.modelDisplayName}>{model.display_name}</span>
+                            )}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className={styles.emptyModels}>{t('oauth_excluded.models_filtered_empty')}</div>
+                )}
               </div>
             ) : resolvedProviderKey ? (
               <div className={styles.emptyModels}>

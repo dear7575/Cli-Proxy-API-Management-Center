@@ -122,6 +122,15 @@ The UI language is automatically detected from browser settings and can be manua
 - Tagging `vX.Y.Z` triggers `.github/workflows/release.yml` to publish `dist/management.html`.
 - The UI version shown in the footer is injected at build time (env `VERSION`, git tag, or `package.json` fallback).
 
+## Recent UI updates (2026-03)
+
+- **Global consistency**: unified control sizes and spacing for inputs, selects, text/icon buttons, and pagination.
+- **Table/list refactor**: aligned table layout patterns across AI Providers, Auth Files, Quota, and Usage pages.
+- **Quota tables improved**: tuned column widths across providers (especially weekly/secondary quota readability), and file name cells now support ellipsis + click-to-view tooltip.
+- **Modal/panel polish**: standardized modal/card spacing and visual hierarchy for edit/detail flows.
+- **Config editor cleanup**: reduced visual nesting and repeated metadata, while keeping section behavior predictable.
+- **Hint text cleanup**: moved many inline helper texts into compact `?` tooltips to improve scanability.
+
 ## Security notes
 
 - The management key is stored in browser `localStorage` using a lightweight obfuscation format (`enc::v1::...`) to avoid plaintext storage; treat it as sensitive.

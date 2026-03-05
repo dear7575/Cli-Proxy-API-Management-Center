@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { HeaderInputList } from '@/components/ui/HeaderInputList';
+import { HintLabel } from '@/components/ui/HintLabel';
 import { ModelInputList } from '@/components/ui/ModelInputList';
 import { modelsToEntries } from '@/components/ui/modelInputListUtils';
 import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
@@ -299,11 +300,10 @@ export function AiProvidersVertexEditPage() {
               disabled={disableControls || saving}
             />
             <Input
-              label={t('ai_providers.prefix_label')}
+              label={<HintLabel label={t('ai_providers.prefix_label')} hint={t('ai_providers.prefix_hint')} />}
               placeholder={t('ai_providers.prefix_placeholder')}
               value={form.prefix ?? ''}
               onChange={(e) => setForm((prev) => ({ ...prev, prefix: e.target.value }))}
-              hint={t('ai_providers.prefix_hint')}
               disabled={disableControls || saving}
             />
             <Input
@@ -320,35 +320,78 @@ export function AiProvidersVertexEditPage() {
               onChange={(e) => setForm((prev) => ({ ...prev, proxyUrl: e.target.value }))}
               disabled={disableControls || saving}
             />
-            <HeaderInputList
-              entries={form.headers}
-              onChange={(entries) => setForm((prev) => ({ ...prev, headers: entries }))}
-              addLabel={t('common.custom_headers_add')}
-              keyPlaceholder={t('common.custom_headers_key_placeholder')}
-              valuePlaceholder={t('common.custom_headers_value_placeholder')}
-              removeButtonTitle={t('common.delete')}
-              removeButtonAriaLabel={t('common.delete')}
-              disabled={disableControls || saving}
-            />
             <div className={styles.modelConfigSection}>
               <div className={styles.modelConfigHeader}>
-                <label className={styles.modelConfigTitle}>{t('ai_providers.vertex_models_label')}</label>
+                <HintLabel
+                  className={styles.modelConfigTitle}
+                  label={t('common.custom_headers_label')}
+                  hint={t('common.custom_headers_hint')}
+                />
+                <div className={styles.modelConfigToolbar}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        headers: [...(prev.headers.length ? prev.headers : [{ key: '', value: '' }]), { key: '', value: '' }],
+                      }))
+                    }
+                    disabled={disableControls || saving}
+                  >
+                    {t('common.custom_headers_add')}
+                  </Button>
+                </div>
+              </div>
+              <HeaderInputList
+                entries={form.headers}
+                onChange={(entries) => setForm((prev) => ({ ...prev, headers: entries }))}
+                addLabel={t('common.custom_headers_add')}
+                keyPlaceholder={t('common.custom_headers_key_placeholder')}
+                valuePlaceholder={t('common.custom_headers_value_placeholder')}
+                removeButtonTitle={t('common.delete')}
+                removeButtonAriaLabel={t('common.delete')}
+                disabled={disableControls || saving}
+                hideAddButton
+              />
+            </div>
+            <div className={styles.modelConfigSection}>
+              <div className={styles.modelConfigHeader}>
+                <HintLabel
+                  className={styles.modelConfigTitle}
+                  label={t('ai_providers.vertex_models_label')}
+                  hint={t('ai_providers.vertex_models_hint')}
+                />
+                <div className={styles.modelConfigToolbar}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        modelEntries: [...prev.modelEntries, { name: '', alias: '' }],
+                      }))
+                    }
+                    disabled={disableControls || saving}
+                  >
+                    {t('ai_providers.vertex_models_add_btn')}
+                  </Button>
+                </div>
               </div>
               <ModelInputList
                 entries={form.modelEntries}
                 onChange={(entries) => setForm((prev) => ({ ...prev, modelEntries: entries }))}
-                addLabel={t('ai_providers.vertex_models_add_btn')}
                 namePlaceholder={t('common.model_name_placeholder')}
                 aliasPlaceholder={t('common.model_alias_placeholder')}
                 removeButtonTitle={t('common.delete')}
                 removeButtonAriaLabel={t('common.delete')}
                 disabled={disableControls || saving}
+                hideAddButton
                 className={styles.modelInputList}
                 rowClassName={styles.modelInputRow}
                 inputClassName={styles.modelInputField}
                 removeButtonClassName={styles.modelRowRemoveButton}
               />
-              <div className={styles.sectionHint}>{t('ai_providers.vertex_models_hint')}</div>
             </div>
           </div>
         )}

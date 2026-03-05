@@ -1,0 +1,104 @@
+.hintLabel {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.hintLabelText {
+  min-width: 0;
+}
+
+.hintTrigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--border-color) 86%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  color: var(--text-secondary);
+  cursor: help;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.hintTrigger:hover,
+.hintTrigger:focus-visible {
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--border-hover) 82%, var(--border-color));
+  background: color-mix(in srgb, var(--bg-secondary) 76%, transparent);
+  outline: none;
+}
+
+.hintTooltip {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 8px);
+  width: min(320px, calc(100vw - 48px));
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 86%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-primary) 96%, var(--bg-secondary) 4%);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: normal;
+  text-align: left;
+  box-shadow: 0 10px 20px -18px rgba(2, 6, 23, 0.7);
+  z-index: 12;
+  opacity: 0;
+  transform: translateX(-4px) translateY(-50%);
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.hintTooltip::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -5px;
+  width: 8px;
+  height: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 86%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--border-color) 86%, transparent);
+  background: color-mix(in srgb, var(--bg-primary) 96%, var(--bg-secondary) 4%);
+  transform: translateY(-50%) rotate(-45deg);
+}
+
+.hintTooltipBottom {
+  top: calc(100% + 8px);
+  left: 0;
+  width: min(360px, calc(100vw - 48px));
+  transform: translateY(-4px);
+}
+
+.hintTooltipBottom::before {
+  top: -5px;
+  left: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 86%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--border-color) 86%, transparent);
+  transform: rotate(45deg);
+}
+
+.hintLabel:hover .hintTooltip,
+.hintLabel:focus-within .hintTooltip {
+  opacity: 1;
+}
+
+.hintLabel:hover .hintTooltip:not(.hintTooltipBottom),
+.hintLabel:focus-within .hintTooltip:not(.hintTooltipBottom) {
+  transform: translateX(0) translateY(-50%);
+}
+
+.hintLabel:hover .hintTooltipBottom,
+.hintLabel:focus-within .hintTooltipBottom {
+  transform: translateY(0);
+}
+
+@media (max-width: 900px) {
+  .hintTooltip {
+    width: min(280px, calc(100vw - 24px));
+  }
+}

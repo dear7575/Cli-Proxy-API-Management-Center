@@ -28,6 +28,10 @@
   min-height: 44px;
 }
 
+.topBarTitleLeft {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
 .topBarTitle {
   min-width: 0;
   text-align: center;
@@ -38,6 +42,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   justify-self: center;
+}
+
+.topBarTitleLeftAligned {
+  text-align: left;
+  justify-self: start;
 }
 
 .backButton {

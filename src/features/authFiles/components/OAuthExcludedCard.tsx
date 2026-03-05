@@ -39,9 +39,9 @@ export function OAuthExcludedCard(props: OAuthExcludedCardProps) {
       ) : Object.keys(excluded).length === 0 ? (
         <EmptyState title={t('oauth_excluded.list_empty_all')} />
       ) : (
-        <div className={styles.excludedList}>
+        <div className={`${styles.excludedList} ${styles.excludedListTwoCol}`}>
           {Object.entries(excluded).map(([provider, models]) => (
-            <div key={provider} className={styles.excludedItem}>
+            <div key={provider} className={`${styles.excludedItem} ${styles.excludedItemGrid}`}>
               <div className={styles.excludedInfo}>
                 <div className={styles.excludedProviderRow}>
                   <div className={styles.excludedProvider}>{provider}</div>

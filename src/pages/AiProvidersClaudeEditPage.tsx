@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { HeaderInputList } from '@/components/ui/HeaderInputList';
+import { HintLabel } from '@/components/ui/HintLabel';
 import { ModelInputList } from '@/components/ui/ModelInputList';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
@@ -122,6 +123,32 @@ export function AiProvidersClaudeEditPage() {
     if (mode === 'auto' || mode === 'always' || mode === 'never') return mode;
     return 'auto';
   }, [form.cloak?.mode]);
+
+  const excludedModelsPreview = useMemo(() => {
+    const seen = new Set<string>();
+    return parseTextList(form.excludedText).reduce<string[]>((acc, item) => {
+      const value = item.trim();
+      if (!value) return acc;
+      const key = value.toLowerCase();
+      if (seen.has(key)) return acc;
+      seen.add(key);
+      acc.push(value);
+      return acc;
+    }, []);
+  }, [form.excludedText]);
+
+  const sensitiveWordsPreview = useMemo(() => {
+    const seen = new Set<string>();
+    return (form.cloak?.sensitiveWords ?? []).reduce<string[]>((acc, item) => {
+      const value = String(item ?? '').trim();
+      if (!value) return acc;
+      const key = value.toLowerCase();
+      if (seen.has(key)) return acc;
+      seen.add(key);
+      acc.push(value);
+      return acc;
+    }, []);
+  }, [form.cloak?.sensitiveWords]);
 
   const connectivityConfigSignature = useMemo(() => {
     const headersSignature = form.headers
@@ -310,8 +337,7 @@ export function AiProvidersClaudeEditPage() {
               disabled={saving || disableControls || isTesting}
             />
             <Input
-              label={t('ai_providers.priority_label')}
-              hint={t('ai_providers.priority_hint')}
+              label={<HintLabel label={t('ai_providers.priority_label')} hint={t('ai_providers.priority_hint')} />}
               type="number"
               step={1}
               value={form.priority ?? ''}
@@ -326,11 +352,10 @@ export function AiProvidersClaudeEditPage() {
               disabled={saving || disableControls || isTesting}
             />
             <Input
-              label={t('ai_providers.prefix_label')}
+              label={<HintLabel label={t('ai_providers.prefix_label')} hint={t('ai_providers.prefix_hint')} />}
               placeholder={t('ai_providers.prefix_placeholder')}
               value={form.prefix ?? ''}
               onChange={(e) => setForm((prev) => ({ ...prev, prefix: e.target.value }))}
-              hint={t('ai_providers.prefix_hint')}
               disabled={saving || disableControls || isTesting}
             />
             <Input
@@ -345,20 +370,49 @@ export function AiProvidersClaudeEditPage() {
               onChange={(e) => setForm((prev) => ({ ...prev, proxyUrl: e.target.value }))}
               disabled={saving || disableControls || isTesting}
             />
-            <HeaderInputList
-              entries={form.headers}
-              onChange={(entries) => setForm((prev) => ({ ...prev, headers: entries }))}
-              addLabel={t('common.custom_headers_add')}
-              keyPlaceholder={t('common.custom_headers_key_placeholder')}
-              valuePlaceholder={t('common.custom_headers_value_placeholder')}
-              removeButtonTitle={t('common.delete')}
-              removeButtonAriaLabel={t('common.delete')}
-              disabled={saving || disableControls || isTesting}
-            />
+            <div className={styles.modelConfigSection}>
+              <div className={styles.modelConfigHeader}>
+                <HintLabel
+                  className={styles.modelConfigTitle}
+                  label={t('common.custom_headers_label')}
+                  hint={t('common.custom_headers_hint')}
+                />
+                <div className={styles.modelConfigToolbar}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        headers: [...(prev.headers.length ? prev.headers : [{ key: '', value: '' }]), { key: '', value: '' }],
+                      }))
+                    }
+                    disabled={saving || disableControls || isTesting}
+                  >
+                    {t('common.custom_headers_add')}
+                  </Button>
+                </div>
+              </div>
+              <HeaderInputList
+                entries={form.headers}
+                onChange={(entries) => setForm((prev) => ({ ...prev, headers: entries }))}
+                addLabel={t('common.custom_headers_add')}
+                keyPlaceholder={t('common.custom_headers_key_placeholder')}
+                valuePlaceholder={t('common.custom_headers_value_placeholder')}
+                removeButtonTitle={t('common.delete')}
+                removeButtonAriaLabel={t('common.delete')}
+                disabled={saving || disableControls || isTesting}
+                hideAddButton
+              />
+            </div>
 
             <div className={styles.modelConfigSection}>
               <div className={styles.modelConfigHeader}>
-                <label className={styles.modelConfigTitle}>{t('ai_providers.claude_models_label')}</label>
+                <HintLabel
+                  className={styles.modelConfigTitle}
+                  label={t('ai_providers.claude_models_label')}
+                  hint={t('ai_providers.claude_models_hint')}
+                />
                 <div className={styles.modelConfigToolbar}>
                   <Button
                     variant="secondary"
@@ -383,8 +437,6 @@ export function AiProvidersClaudeEditPage() {
                   </Button>
                 </div>
               </div>
-
-              <div className={styles.sectionHint}>{t('ai_providers.claude_models_hint')}</div>
 
               <ModelInputList
                 entries={form.modelEntries}
@@ -464,22 +516,45 @@ export function AiProvidersClaudeEditPage() {
               )}
             </div>
 
-            <div className="form-group">
-              <label>{t('ai_providers.excluded_models_label')}</label>
+            <div className={styles.modelConfigSection}>
+              <div className={styles.modelConfigHeader}>
+                <HintLabel
+                  className={styles.modelConfigTitle}
+                  label={t('ai_providers.excluded_models_label')}
+                  hint={t('ai_providers.excluded_models_hint')}
+                />
+                <div className={styles.modelConfigToolbar}>
+                  <span className={styles.excludedModelsCount}>
+                    {t('ai_providers.excluded_models_count', { count: excludedModelsPreview.length })}
+                  </span>
+                </div>
+              </div>
               <textarea
-                className="input"
+                className={`input ${styles.excludedModelsInput}`}
                 placeholder={t('ai_providers.excluded_models_placeholder')}
                 value={form.excludedText}
                 onChange={(e) => setForm((prev) => ({ ...prev, excludedText: e.target.value }))}
                 rows={4}
                 disabled={saving || disableControls || isTesting}
               />
-              <div className="hint">{t('ai_providers.excluded_models_hint')}</div>
+              {excludedModelsPreview.length > 0 ? (
+                <div className={styles.excludedModelsPreviewList}>
+                  {excludedModelsPreview.map((model) => (
+                    <span key={model} className={`${styles.modelTag} ${styles.excludedModelTag}`}>
+                      {model}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </div>
 
             <div className={styles.modelConfigSection}>
               <div className={styles.modelConfigHeader}>
-                <label className={styles.modelConfigTitle}>{t('ai_providers.claude_cloak_title')}</label>
+                <HintLabel
+                  className={styles.modelConfigTitle}
+                  label={t('ai_providers.claude_cloak_title')}
+                  hint={t('ai_providers.claude_cloak_hint')}
+                />
                 <div className={styles.modelConfigToolbar}>
                   <ToggleSwitch
                     checked={Boolean(form.cloak)}
@@ -512,53 +587,73 @@ export function AiProvidersClaudeEditPage() {
                   />
                 </div>
               </div>
-              <div className={styles.sectionHint}>{t('ai_providers.claude_cloak_hint')}</div>
 
               {form.cloak ? (
                 <>
-                  <div className="form-group">
-                    <label>{t('ai_providers.claude_cloak_mode_label')}</label>
-                    <Select
-                      value={resolvedCloakMode}
-                      options={cloakModeOptions}
-                      onChange={(value) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          cloak: {
-                            ...(prev.cloak ?? {}),
-                            mode: value,
-                          },
-                        }))
-                      }
-                      ariaLabel={t('ai_providers.claude_cloak_mode_label')}
-                      disabled={saving || disableControls || isTesting}
-                    />
-                    <div className="hint">{t('ai_providers.claude_cloak_mode_hint')}</div>
+                  <div className={styles.cloakInlineRow}>
+                    <div className={`form-group ${styles.cloakInlineField}`}>
+                      <label>
+                        <HintLabel
+                          label={t('ai_providers.claude_cloak_mode_label')}
+                          hint={t('ai_providers.claude_cloak_mode_hint')}
+                        />
+                      </label>
+                      <Select
+                        value={resolvedCloakMode}
+                        options={cloakModeOptions}
+                        onChange={(value) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            cloak: {
+                              ...(prev.cloak ?? {}),
+                              mode: value,
+                            },
+                          }))
+                        }
+                        ariaLabel={t('ai_providers.claude_cloak_mode_label')}
+                        disabled={saving || disableControls || isTesting}
+                      />
+                    </div>
+
+                    <div className={`form-group ${styles.cloakInlineField}`}>
+                      <label>
+                        <HintLabel
+                          label={t('ai_providers.claude_cloak_strict_label')}
+                          hint={t('ai_providers.claude_cloak_strict_hint')}
+                        />
+                      </label>
+                      <ToggleSwitch
+                        checked={Boolean(form.cloak.strictMode)}
+                        onChange={(value) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            cloak: {
+                              ...(prev.cloak ?? {}),
+                              strictMode: value,
+                            },
+                          }))
+                        }
+                        disabled={saving || disableControls || isTesting}
+                        ariaLabel={t('ai_providers.claude_cloak_strict_label')}
+                      />
+                    </div>
                   </div>
 
-                  <div className="form-group">
-                    <label>{t('ai_providers.claude_cloak_strict_label')}</label>
-                    <ToggleSwitch
-                      checked={Boolean(form.cloak.strictMode)}
-                      onChange={(value) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          cloak: {
-                            ...(prev.cloak ?? {}),
-                            strictMode: value,
-                          },
-                        }))
-                      }
-                      disabled={saving || disableControls || isTesting}
-                      ariaLabel={t('ai_providers.claude_cloak_strict_label')}
-                    />
-                    <div className="hint">{t('ai_providers.claude_cloak_strict_hint')}</div>
-                  </div>
-
-                  <div className="form-group">
-                    <label>{t('ai_providers.claude_cloak_sensitive_words_label')}</label>
+                  <div className={styles.cloakSensitivePanel}>
+                    <div className={styles.modelConfigHeader}>
+                      <HintLabel
+                        className={styles.modelConfigTitle}
+                        label={t('ai_providers.claude_cloak_sensitive_words_label')}
+                        hint={t('ai_providers.claude_cloak_sensitive_words_hint')}
+                      />
+                      <div className={styles.modelConfigToolbar}>
+                        <span className={styles.excludedModelsCount}>
+                          {t('ai_providers.claude_cloak_sensitive_words_count')} {sensitiveWordsPreview.length}
+                        </span>
+                      </div>
+                    </div>
                     <textarea
-                      className="input"
+                      className={`input ${styles.excludedModelsInput}`}
                       placeholder={t('ai_providers.claude_cloak_sensitive_words_placeholder')}
                       value={(form.cloak.sensitiveWords ?? []).join('\n')}
                       onChange={(e) => {
@@ -574,7 +669,15 @@ export function AiProvidersClaudeEditPage() {
                       rows={3}
                       disabled={saving || disableControls || isTesting}
                     />
-                    <div className="hint">{t('ai_providers.claude_cloak_sensitive_words_hint')}</div>
+                    {sensitiveWordsPreview.length > 0 ? (
+                      <div className={styles.excludedModelsPreviewList}>
+                        {sensitiveWordsPreview.map((word) => (
+                          <span key={word} className={`${styles.modelTag} ${styles.excludedModelTag}`}>
+                            {word}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 </>
               ) : null}

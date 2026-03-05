@@ -14,6 +14,7 @@ import type { AuthFileItem, ResolvedTheme, ThemeColors } from '@/types';
 import { TYPE_COLORS, formatKimiResetHint, formatQuotaResetTime } from '@/utils/quota';
 import { formatFileSize } from '@/utils/format';
 import { formatModified } from '@/features/authFiles/constants';
+import { CountTooltipCell } from '@/components/providers/CountTooltipCell';
 import { QuotaProgressBar, type QuotaStatusState } from './QuotaCard';
 import { useQuotaLoader } from './useQuotaLoader';
 import type { QuotaConfig } from './quotaConfigs';
@@ -721,7 +722,12 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
                     <tr key={file.name} className={styles.quotaTableRow}>
                       <td className={styles.quotaCellIndex}>{rowIndex}</td>
                       <td className={styles.quotaCellName}>
-                        <span className={styles.quotaCellNameText} title={file.name}>{file.name}</span>
+                        <CountTooltipCell
+                          items={[file.name]}
+                          triggerLabel={<span className={styles.quotaCellNameText}>{file.name}</span>}
+                          triggerClassName={styles.quotaCellNameTrigger}
+                          triggerAriaLabel={t('auth_files.file_name', { defaultValue: '文件名' })}
+                        />
                       </td>
                       <td className={styles.quotaCellType}>
                         <span

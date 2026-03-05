@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/Button';
 import { AutocompleteInput } from '@/components/ui/AutocompleteInput';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
-import { IconInfo, IconX } from '@/components/ui/icons';
+import { HintLabel } from '@/components/ui/HintLabel';
+import { IconX } from '@/components/ui/icons';
 import { SecondaryScreenShell } from '@/components/common/SecondaryScreenShell';
 import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
 import { useAuthStore, useNotificationStore } from '@/stores';
@@ -14,6 +15,7 @@ import { authFilesApi } from '@/services/api';
 import type { AuthFileItem, OAuthModelAliasEntry } from '@/types';
 import { generateId } from '@/utils/helpers';
 import styles from './AuthFilesOAuthModelAliasEditPage.module.scss';
+import layoutStyles from './AiProvidersEditLayout.module.scss';
 
 type AuthFileModelItem = { id: string; display_name?: string; type?: string; owned_by?: string };
 
@@ -108,8 +110,13 @@ export function AuthFilesOAuthModelAliasEditPage() {
       .filter((value) => !baseSet.has(value.toLowerCase()))
       .sort((a, b) => a.localeCompare(b));
 
-    return [...OAUTH_PROVIDER_PRESETS, ...extraList];
-  }, [excluded, files, modelAlias]);
+    const merged = [...OAUTH_PROVIDER_PRESETS, ...extraList];
+    const currentProvider = provider.trim();
+    if (currentProvider && !merged.some((value) => value.toLowerCase() === currentProvider.toLowerCase())) {
+      merged.unshift(currentProvider);
+    }
+    return merged;
+  }, [excluded, files, modelAlias, provider]);
 
   const getTypeLabel = useCallback(
     (type: string): string => {
@@ -124,7 +131,8 @@ export function AuthFilesOAuthModelAliasEditPage() {
 
   const resolvedProviderKey = useMemo(() => normalizeProviderKey(provider), [provider]);
   const title = useMemo(() => t('oauth_model_alias.add_title'), [t]);
-  const headerHint = useMemo(() => {
+  const providerHint = useMemo(() => t('oauth_model_alias.provider_hint'), [t]);
+  const mappingsHint = useMemo(() => {
     if (!provider.trim()) {
       return t('oauth_model_alias.provider_hint');
     }
@@ -135,6 +143,28 @@ export function AuthFilesOAuthModelAliasEditPage() {
       return t('oauth_model_alias.model_source_unsupported');
     }
     return t('oauth_model_alias.model_source_loaded', { count: modelsList.length });
+  }, [modelsError, modelsList.length, modelsLoading, provider, t]);
+
+  const modelsBadge = useMemo(() => {
+    if (!provider.trim()) {
+      return null;
+    }
+    if (modelsLoading) {
+      return {
+        text: t('oauth_model_alias.model_source_loading_short'),
+        className: styles.modelsSourceBadgeLoading,
+      };
+    }
+    if (modelsError === 'unsupported') {
+      return {
+        text: t('oauth_model_alias.model_source_unsupported_short'),
+        className: styles.modelsSourceBadgeWarning,
+      };
+    }
+    return {
+      text: t('oauth_model_alias.model_source_loaded_badge', { count: modelsList.length }),
+      className: styles.modelsSourceBadgeSuccess,
+    };
   }, [modelsError, modelsList.length, modelsLoading, provider, t]);
 
   const handleBack = useCallback(() => {
@@ -349,10 +379,28 @@ export function AuthFilesOAuthModelAliasEditPage() {
       backLabel={t('common.back')}
       backAriaLabel={t('common.back')}
       contentClassName={styles.pageContent}
-      rightAction={
-        <Button size="sm" onClick={handleSave} loading={saving} disabled={!canSave}>
-          {t('oauth_model_alias.save')}
-        </Button>
+      hideTopBarBackButton
+      hideTopBarRightAction
+      floatingAction={
+        <div className={layoutStyles.floatingActions}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleBack}
+            className={layoutStyles.floatingBackButton}
+          >
+            {t('common.back')}
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => void handleSave()}
+            loading={saving}
+            disabled={!canSave}
+            className={layoutStyles.floatingSaveButton}
+          >
+            {t('common.save')}
+          </Button>
+        </div>
       }
       isLoading={initialLoading}
       loadingLabel={t('common.loading')}
@@ -368,71 +416,77 @@ export function AuthFilesOAuthModelAliasEditPage() {
         <>
           <Card className={styles.settingsCard}>
             <div className={styles.settingsHeader}>
-              <div className={styles.settingsHeaderTitle}>
-                <IconInfo size={16} />
-                <span>{t('oauth_model_alias.title')}</span>
-              </div>
-              <div className={styles.settingsHeaderHint}>{headerHint}</div>
+              <HintLabel
+                className={styles.settingsHeaderTitle}
+                label={t('oauth_model_alias.title')}
+                hint={providerHint}
+              />
             </div>
 
             <div className={styles.settingsSection}>
-              <div className={styles.settingsRow}>
-                <div className={styles.settingsInfo}>
-                  <div className={styles.settingsLabel}>{t('oauth_model_alias.provider_label')}</div>
-                  <div className={styles.settingsDesc}>{t('oauth_model_alias.provider_hint')}</div>
-                </div>
-                <div className={styles.settingsControl}>
-                  <AutocompleteInput
-                    id="oauth-model-alias-provider"
-                    placeholder={t('oauth_model_alias.provider_placeholder')}
-                    value={provider}
-                    onChange={updateProvider}
-                    options={providerOptions}
-                    disabled={disableControls || saving}
-                    wrapperStyle={{ marginBottom: 0 }}
-                  />
-                </div>
+              <div className={styles.providerChooserHeader}>
+                <div className={styles.settingsLabel}>{t('oauth_model_alias.provider_label')}</div>
+                {provider.trim() ? (
+                  <span className={styles.providerCurrentBadge}>
+                    {t('oauth_model_alias.provider_label')}: {getTypeLabel(provider.trim())}
+                  </span>
+                ) : null}
               </div>
 
-              {providerOptions.length > 0 && (
-                <div className={styles.tagList}>
+              {providerOptions.length > 0 ? (
+                <div className={styles.providerCardGrid}>
                   {providerOptions.map((option) => {
                     const isActive = normalizeProviderKey(provider) === option.toLowerCase();
                     return (
                       <button
                         key={option}
                         type="button"
-                        className={`${styles.tag} ${isActive ? styles.tagActive : ''}`}
+                        className={`${styles.providerCard} ${isActive ? styles.providerCardActive : ''}`}
                         onClick={() => updateProvider(option)}
                         disabled={disableControls || saving}
                       >
-                        {getTypeLabel(option)}
+                        <span className={styles.providerCardTitle}>{getTypeLabel(option)}</span>
+                        <span className={styles.providerCardMeta}>{option}</span>
                       </button>
                     );
                   })}
                 </div>
-              )}
+              ) : null}
+
             </div>
           </Card>
 
           <Card className={styles.settingsCard}>
             <div className={styles.mappingsHeader}>
-              <div className={styles.mappingsTitle}>{t('oauth_model_alias.alias_label')}</div>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={addMappingEntry}
-                disabled={disableControls || saving || modelAliasUnsupported}
-              >
-                {t('oauth_model_alias.add_alias')}
-              </Button>
+              <div className={styles.mappingsTitleGroup}>
+                <HintLabel
+                  className={styles.mappingsTitle}
+                  label={t('oauth_model_alias.alias_label')}
+                  hint={mappingsHint}
+                />
+                {modelsBadge ? (
+                  <span className={`${styles.modelsSourceBadge} ${modelsBadge.className}`}>
+                    {modelsBadge.text}
+                  </span>
+                ) : null}
+              </div>
+              <div className={styles.mappingsToolbar}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={addMappingEntry}
+                  disabled={disableControls || saving || modelAliasUnsupported}
+                >
+                  {t('oauth_model_alias.add_alias')}
+                </Button>
+              </div>
             </div>
 
             <div className={styles.mappingsBody}>
               {mappings.map((entry, index) => (
                 <div key={entry.id} className={styles.mappingRow}>
                   <AutocompleteInput
-                    wrapperStyle={{ flex: 1, marginBottom: 0 }}
+                    wrapperStyle={{ width: '100%', marginBottom: 0 }}
                     placeholder={t('oauth_model_alias.alias_name_placeholder')}
                     value={entry.name}
                     onChange={(val) => updateMappingEntry(index, 'name', val)}

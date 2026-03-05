@@ -516,6 +516,14 @@
   min-width: 1520px;
 }
 
+.quotaTableCodex .quotaColPrimary {
+  width: 360px;
+}
+
+.quotaTableCodex .quotaColSecondary {
+  width: 240px;
+}
+
 .quotaColIndex {
   width: 58px;
 }
@@ -541,11 +549,11 @@
 }
 
 .quotaColPrimary {
-  width: 280px;
+  width: 320px;
 }
 
 .quotaColSecondary {
-  width: 280px;
+  width: 260px;
 }
 
 .quotaColActions {
@@ -588,6 +596,17 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.quotaCellNameTrigger {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  text-decoration: none;
+  color: inherit;
+  justify-content: flex-start;
 }
 
 .quotaCellName {
