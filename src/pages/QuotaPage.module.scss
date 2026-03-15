@@ -59,6 +59,20 @@
   margin-left: auto;
 }
 
+.quotaTableToolbar {
+  margin-bottom: $spacing-md;
+}
+
+.quotaTypeFilter {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.quotaTypeSelect {
+  min-width: 148px;
+}
+
 .titleWrapper {
   display: flex;
   align-items: center;
@@ -526,6 +540,10 @@
 
 .quotaColIndex {
   width: 58px;
+}
+
+.quotaColSelect {
+  width: 44px;
 }
 
 .quotaColName {

@@ -5,10 +5,11 @@
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow-x: hidden;
   padding-bottom: calc(
     var(--config-action-bar-height, 0px) + 16px + env(safe-area-inset-bottom) + #{$spacing-md}
   );
+  min-width: 0;
 }
 
 .pageHeader {
@@ -234,6 +235,9 @@
   overflow: hidden;
   position: relative;
   --floating-controls-height: 0px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 
   @supports (height: 100dvh) {
     height: clamp(360px, 60dvh, 920px);
@@ -255,18 +259,44 @@
 
   // CodeMirror theme overrides
   :global {
+    .cm-theme,
+    .cm-theme-light,
+    .cm-theme-dark {
+      height: 100%;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      min-width: 0;
+    }
+
     .cm-editor {
       height: 100%;
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+      min-width: 0;
       font-size: 14px;
       font-family: 'Consolas', 'Monaco', 'Menlo', monospace;
+      overflow: hidden;
+      max-width: 100%;
+      box-sizing: border-box;
     }
 
     .cm-scroller {
-      overflow: auto;
+      height: 100%;
+      max-height: 100%;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: auto !important;
+      overflow-y: auto !important;
       padding-top: calc(var(--floating-controls-height, 0px) + #{$spacing-md});
       -webkit-overflow-scrolling: touch;
       touch-action: pan-x pan-y;
       overscroll-behavior: contain;
+      scrollbar-gutter: stable;
+      scrollbar-width: auto !important;
+      box-sizing: border-box;
     }
 
     .cm-gutters {

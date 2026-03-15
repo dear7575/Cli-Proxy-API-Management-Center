@@ -14,6 +14,7 @@ import { SecondaryScreenShell } from '@/components/common/SecondaryScreenShell';
 import { providersApi } from '@/services/api';
 import { useAuthStore, useConfigStore, useNotificationStore } from '@/stores';
 import type { ProviderKeyConfig } from '@/types';
+import { excludedModelsToText, parseExcludedModels } from '@/components/providers/utils';
 import { buildHeaderObject, headersToEntries, normalizeHeaderEntries } from '@/utils/headers';
 import type { VertexFormState } from '@/components/providers';
 import layoutStyles from './AiProvidersEditLayout.module.scss';
@@ -28,7 +29,9 @@ const buildEmptyForm = (): VertexFormState => ({
   proxyUrl: '',
   headers: [],
   models: [],
+  excludedModels: [],
   modelEntries: [{ name: '', alias: '' }],
+  excludedText: '',
 });
 
 const parseIndexParam = (value: string | undefined) => {
@@ -56,6 +59,7 @@ const buildVertexSignature = (form: VertexFormState) =>
     proxyUrl: String(form.proxyUrl ?? '').trim(),
     headers: normalizeHeaderEntries(form.headers),
     models: normalizeModelEntries(form.modelEntries),
+    excludedModels: parseExcludedModels(form.excludedText ?? ''),
   });
 
 export function AiProvidersVertexEditPage() {
@@ -155,6 +159,7 @@ export function AiProvidersVertexEditPage() {
         ...initialData,
         headers: headersToEntries(initialData.headers),
         modelEntries: modelsToEntries(initialData.models),
+        excludedText: excludedModelsToText(initialData.excludedModels),
       };
       setForm(nextForm);
       setBaselineSignature(buildVertexSignature(nextForm));
@@ -189,10 +194,6 @@ export function AiProvidersVertexEditPage() {
 
     const trimmedBaseUrl = (form.baseUrl ?? '').trim();
     const baseUrl = trimmedBaseUrl || undefined;
-    if (!baseUrl) {
-      showNotification(t('notification.vertex_base_url_required'), 'error');
-      return;
-    }
 
     setSaving(true);
     setError('');
@@ -215,6 +216,7 @@ export function AiProvidersVertexEditPage() {
             return { name, alias };
           })
           .filter(Boolean) as ProviderKeyConfig['models'],
+        excludedModels: parseExcludedModels(form.excludedText),
       };
 
       const nextList =
@@ -392,6 +394,18 @@ export function AiProvidersVertexEditPage() {
                 inputClassName={styles.modelInputField}
                 removeButtonClassName={styles.modelRowRemoveButton}
               />
+            </div>
+            <div className="form-group">
+              <label>{t('ai_providers.excluded_models_label')}</label>
+              <textarea
+                className="input"
+                placeholder={t('ai_providers.excluded_models_placeholder')}
+                value={form.excludedText}
+                onChange={(e) => setForm((prev) => ({ ...prev, excludedText: e.target.value }))}
+                rows={4}
+                disabled={disableControls || saving}
+              />
+              <div className="hint">{t('ai_providers.excluded_models_hint')}</div>
             </div>
           </div>
         )}

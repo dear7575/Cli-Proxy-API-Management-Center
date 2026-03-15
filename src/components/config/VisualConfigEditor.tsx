@@ -1,35 +1,38 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useId, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
-import { IconChevronDown, IconChevronUp, IconCopy, IconInfo, IconPencil, IconTrash2 } from '@/components/ui/icons';
+import { IconChevronDown, IconChevronUp, IconInfo } from '@/components/ui/icons';
 import { ConfigSection } from '@/components/config/ConfigSection';
-import { useNotificationStore } from '@/stores';
 import styles from './VisualConfigEditor.module.scss';
-import { copyToClipboard } from '@/utils/clipboard';
 import type {
   PayloadFilterRule,
-  PayloadModelEntry,
-  PayloadParamEntry,
-  PayloadParamValueType,
+  PayloadParamValidationErrorCode,
   PayloadRule,
+  VisualConfigValidationErrorCode,
+  VisualConfigValidationErrors,
   VisualConfigValues,
 } from '@/types/visualConfig';
-import { makeClientId } from '@/types/visualConfig';
 import {
-  VISUAL_CONFIG_PAYLOAD_VALUE_TYPE_OPTIONS,
-  VISUAL_CONFIG_PROTOCOL_OPTIONS,
-} from '@/hooks/useVisualConfig';
-import { maskApiKey } from '@/utils/format';
-import { isValidApiKeyCharset } from '@/utils/validation';
+  ApiKeysCardEditor,
+  PayloadFilterRulesEditor,
+  PayloadRulesEditor,
+} from './VisualConfigEditorBlocks';
 
 interface VisualConfigEditorProps {
   values: VisualConfigValues;
+  validationErrors?: VisualConfigValidationErrors;
   disabled?: boolean;
   onChange: (values: Partial<VisualConfigValues>) => void;
+}
+
+function getValidationMessage(
+  t: ReturnType<typeof useTranslation>['t'],
+  errorCode?: VisualConfigValidationErrorCode | PayloadParamValidationErrorCode
+) {
+  if (!errorCode) return undefined;
+  return t(`config_management.visual.validation.${errorCode}`);
 }
 
 type ToggleRowProps = {
@@ -74,15 +77,6 @@ function HintBadge({ text, focusable = true }: { text: ReactNode; focusable?: bo
       <span className={styles.toggleHintTooltip} role="tooltip">
         {text}
       </span>
-    </span>
-  );
-}
-
-function LabelWithHint({ label, hint }: { label: string; hint: ReactNode }) {
-  return (
-    <span className={styles.inlineLabelWithHint}>
-      <span>{label}</span>
-      <HintBadge text={hint} />
     </span>
   );
 }
@@ -167,747 +161,48 @@ function PayloadSectionBlock({
   );
 }
 
-function ApiKeysCardEditor({
-  value,
-  disabled,
+export function VisualConfigEditor({
+  values,
+  validationErrors,
+  disabled = false,
   onChange,
-}: {
-  value: string;
-  disabled?: boolean;
-  onChange: (nextValue: string) => void;
-}) {
+}: VisualConfigEditorProps) {
   const { t } = useTranslation();
-  const { showNotification } = useNotificationStore();
-  const apiKeys = useMemo(
-    () =>
-      value
-        .split('\n')
-        .map((key) => key.trim())
-        .filter(Boolean),
-    [value]
-  );
-
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [inputValue, setInputValue] = useState('');
-  const [formError, setFormError] = useState('');
-
-  function generateSecureApiKey(): string {
-    const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    const array = new Uint8Array(17);
-    crypto.getRandomValues(array);
-    return 'sk-' + Array.from(array, (b) => charset[b % charset.length]).join('');
-  }
-
-  const openAddModal = () => {
-    setEditingIndex(null);
-    setInputValue('');
-    setFormError('');
-    setModalOpen(true);
-  };
-
-  const openEditModal = (index: number) => {
-    setEditingIndex(index);
-    setInputValue(apiKeys[index] ?? '');
-    setFormError('');
-    setModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setModalOpen(false);
-    setInputValue('');
-    setEditingIndex(null);
-    setFormError('');
-  };
-
-  const updateApiKeys = (nextKeys: string[]) => {
-    onChange(nextKeys.join('\n'));
-  };
-
-  const handleDelete = (index: number) => {
-    updateApiKeys(apiKeys.filter((_, i) => i !== index));
-  };
-
-  const handleSave = () => {
-    const trimmed = inputValue.trim();
-    if (!trimmed) {
-      setFormError(t('config_management.visual.api_keys.error_empty'));
-      return;
-    }
-    if (!isValidApiKeyCharset(trimmed)) {
-      setFormError(t('config_management.visual.api_keys.error_invalid'));
-      return;
-    }
-
-    const nextKeys =
-      editingIndex === null
-        ? [...apiKeys, trimmed]
-        : apiKeys.map((key, idx) => (idx === editingIndex ? trimmed : key));
-    updateApiKeys(nextKeys);
-    closeModal();
-  };
-
-  const handleCopy = async (apiKey: string) => {
-    const copied = await copyToClipboard(apiKey);
-    showNotification(
-      t(copied ? 'notification.link_copied' : 'notification.copy_failed'),
-      copied ? 'success' : 'error'
-    );
-  };
-
-  const handleGenerate = () => {
-    setInputValue(generateSecureApiKey());
-    setFormError('');
-  };
-
-  return (
-    <div className={`form-group ${styles.compactFormGroup}`}>
-      <div className={styles.apiKeysHeader}>
-        <div className={styles.apiKeysMeta}>
-          <label className={styles.apiKeysLabel}>
-            <span>{t('config_management.visual.api_keys.label')}</span>
-            <HintBadge text={t('config_management.visual.api_keys.hint')} />
-          </label>
-          <span className={styles.apiKeysCount}>{apiKeys.length}</span>
-        </div>
-        <Button size="sm" onClick={openAddModal} disabled={disabled}>
-          {t('config_management.visual.api_keys.add')}
-        </Button>
-      </div>
-
-      {apiKeys.length === 0 ? (
-        <div className={styles.apiKeysEmpty}>
-          {t('config_management.visual.api_keys.empty')}
-        </div>
-      ) : (
-        <div className={styles.apiKeysList}>
-          {apiKeys.map((key, index) => (
-            <div key={`${key}-${index}`} className={styles.apiKeyRow}>
-              <div className={styles.apiKeyLine}>
-                <span className={styles.apiKeyIndex}>#{index + 1}</span>
-                <div className={styles.apiKeyValue} title={maskApiKey(String(key || ''))}>
-                  {maskApiKey(String(key || ''))}
-                </div>
-                <div className={styles.apiKeyActions}>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className={styles.iconActionButton}
-                    onClick={() => handleCopy(key)}
-                    disabled={disabled}
-                    title={t('common.copy')}
-                    aria-label={t('common.copy')}
-                  >
-                    <IconCopy size={16} />
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className={styles.iconActionButton}
-                    onClick={() => openEditModal(index)}
-                    disabled={disabled}
-                    title={t('config_management.visual.common.edit')}
-                    aria-label={t('config_management.visual.common.edit')}
-                  >
-                    <IconPencil size={16} />
-                  </Button>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    className={styles.iconActionButton}
-                    onClick={() => handleDelete(index)}
-                    disabled={disabled}
-                    title={t('config_management.visual.common.delete')}
-                    aria-label={t('config_management.visual.common.delete')}
-                  >
-                    <IconTrash2 size={16} />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <Modal
-        open={modalOpen}
-        onClose={closeModal}
-        className={styles.apiKeyModal}
-        title={editingIndex !== null ? t('config_management.visual.api_keys.edit_title') : t('config_management.visual.api_keys.add_title')}
-        footer={
-          <>
-            <Button variant="secondary" onClick={closeModal} disabled={disabled}>
-              {t('config_management.visual.common.cancel')}
-            </Button>
-            <Button onClick={handleSave} disabled={disabled}>
-              {editingIndex !== null ? t('config_management.visual.common.update') : t('config_management.visual.common.add')}
-            </Button>
-          </>
-        }
-      >
-        <Input
-          label={t('config_management.visual.api_keys.input_label')}
-          placeholder={t('config_management.visual.api_keys.input_placeholder')}
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          disabled={disabled}
-          error={formError || undefined}
-          hint={t('config_management.visual.api_keys.input_hint')}
-          className={styles.apiKeyInput}
-          rightElement={
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={handleGenerate}
-              disabled={disabled}
-            >
-              {t('config_management.visual.api_keys.generate')}
-            </Button>
-          }
-        />
-      </Modal>
-    </div>
-  );
-}
-
-function PayloadRulesEditor({
-  value,
-  disabled,
-  protocolFirst = false,
-  onChange,
-}: {
-  value: PayloadRule[];
-  disabled?: boolean;
-  protocolFirst?: boolean;
-  onChange: (next: PayloadRule[]) => void;
-}) {
-  const { t } = useTranslation();
-  const rules = value.length ? value : [];
-  const protocolOptions = useMemo(
-    () =>
-      VISUAL_CONFIG_PROTOCOL_OPTIONS.map((option) => ({
-        value: option.value,
-        label: t(option.labelKey, { defaultValue: option.defaultLabel }),
-      })),
-    [t]
-  );
-  const payloadValueTypeOptions = useMemo(
-    () =>
-      VISUAL_CONFIG_PAYLOAD_VALUE_TYPE_OPTIONS.map((option) => ({
-        value: option.value,
-        label: t(option.labelKey, { defaultValue: option.defaultLabel }),
-      })),
-    [t]
-  );
-
-  const addRule = () => onChange([...rules, { id: makeClientId(), models: [], params: [] }]);
-  const removeRule = (ruleIndex: number) => onChange(rules.filter((_, i) => i !== ruleIndex));
-
-  const updateRule = (ruleIndex: number, patch: Partial<PayloadRule>) =>
-    onChange(rules.map((rule, i) => (i === ruleIndex ? { ...rule, ...patch } : rule)));
-
-  const addModel = (ruleIndex: number) => {
-    const rule = rules[ruleIndex];
-    const nextModel: PayloadModelEntry = { id: makeClientId(), name: '', protocol: undefined };
-    updateRule(ruleIndex, { models: [...rule.models, nextModel] });
-  };
-
-  const removeModel = (ruleIndex: number, modelIndex: number) => {
-    const rule = rules[ruleIndex];
-    updateRule(ruleIndex, { models: rule.models.filter((_, i) => i !== modelIndex) });
-  };
-
-  const updateModel = (ruleIndex: number, modelIndex: number, patch: Partial<PayloadModelEntry>) => {
-    const rule = rules[ruleIndex];
-    updateRule(ruleIndex, {
-      models: rule.models.map((m, i) => (i === modelIndex ? { ...m, ...patch } : m)),
-    });
-  };
-
-  const addParam = (ruleIndex: number) => {
-    const rule = rules[ruleIndex];
-    const nextParam: PayloadParamEntry = {
-      id: makeClientId(),
-      path: '',
-      valueType: 'string',
-      value: '',
-    };
-    updateRule(ruleIndex, { params: [...rule.params, nextParam] });
-  };
-
-  const removeParam = (ruleIndex: number, paramIndex: number) => {
-    const rule = rules[ruleIndex];
-    updateRule(ruleIndex, { params: rule.params.filter((_, i) => i !== paramIndex) });
-  };
-
-  const updateParam = (ruleIndex: number, paramIndex: number, patch: Partial<PayloadParamEntry>) => {
-    const rule = rules[ruleIndex];
-    updateRule(ruleIndex, {
-      params: rule.params.map((p, i) => (i === paramIndex ? { ...p, ...patch } : p)),
-    });
-  };
-
-  const getValuePlaceholder = (valueType: PayloadParamValueType) => {
-    switch (valueType) {
-      case 'string':
-        return t('config_management.visual.payload_rules.value_string');
-      case 'number':
-        return t('config_management.visual.payload_rules.value_number');
-      case 'boolean':
-        return t('config_management.visual.payload_rules.value_boolean');
-      case 'json':
-        return t('config_management.visual.payload_rules.value_json');
-      default:
-        return t('config_management.visual.payload_rules.value_default');
-    }
-  };
-
-  return (
-    <div className={styles.ruleEditor}>
-      {rules.map((rule, ruleIndex) => (
-        <div key={rule.id} className={styles.ruleCard}>
-          <div className={styles.ruleHeader}>
-            <div className={styles.ruleHeaderMain}>
-              <div className={styles.ruleTitle}>
-                {t('config_management.visual.payload_rules.rule')} {ruleIndex + 1}
-              </div>
-            </div>
-            <Button
-              variant="danger"
-              size="sm"
-              className={styles.iconActionButton}
-              onClick={() => removeRule(ruleIndex)}
-              disabled={disabled}
-              title={t('config_management.visual.common.delete')}
-              aria-label={t('config_management.visual.common.delete')}
-            >
-              <IconTrash2 size={16} />
-            </Button>
-          </div>
-
-          <div className={styles.ruleGroup}>
-            <div className={styles.ruleGroupHeader}>
-              <div className={styles.ruleGroupTitle}>
-                <span className={styles.ruleGroupLabel}>
-                  {t('config_management.visual.payload_rules.models')}
-                </span>
-                <span className={styles.ruleGroupCount}>{rule.models.length}</span>
-              </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => addModel(ruleIndex)}
-                disabled={disabled}
-              >
-                {t('config_management.visual.payload_rules.add_model')}
-              </Button>
-            </div>
-            <div className={styles.ruleGroupBody}>
-              {rule.models.length > 0 && (
-                <div
-                  className={[
-                    styles.groupRowHeader,
-                    protocolFirst ? styles.groupRowHeaderModelProtocolFirst : styles.groupRowHeaderModel,
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                >
-                  {protocolFirst ? (
-                    <>
-                      <span>{t('config_management.visual.payload_rules.provider_type')}</span>
-                      <span>{t('config_management.visual.payload_rules.model_name')}</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>{t('config_management.visual.payload_rules.model_name')}</span>
-                      <span>{t('config_management.visual.payload_rules.provider_type')}</span>
-                    </>
-                  )}
-                  <span className={styles.groupRowHeaderAction} />
-                </div>
-              )}
-              {(rule.models.length ? rule.models : []).map((model, modelIndex) => (
-                <div
-                  key={model.id}
-                  className={[
-                    styles.payloadRuleModelRow,
-                    protocolFirst ? styles.payloadRuleModelRowProtocolFirst : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                >
-                  {protocolFirst ? (
-                    <>
-                      <Select
-                        value={model.protocol ?? ''}
-                        options={protocolOptions}
-                        disabled={disabled}
-                        ariaLabel={t('config_management.visual.payload_rules.provider_type')}
-                        onChange={(nextValue) =>
-                          updateModel(ruleIndex, modelIndex, {
-                            protocol: (nextValue || undefined) as PayloadModelEntry['protocol'],
-                          })
-                        }
-                      />
-                      <input
-                        className="input"
-                        placeholder={t('config_management.visual.payload_rules.model_name')}
-                        value={model.name}
-                        onChange={(e) => updateModel(ruleIndex, modelIndex, { name: e.target.value })}
-                        disabled={disabled}
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <input
-                        className="input"
-                        placeholder={t('config_management.visual.payload_rules.model_name')}
-                        value={model.name}
-                        onChange={(e) => updateModel(ruleIndex, modelIndex, { name: e.target.value })}
-                        disabled={disabled}
-                      />
-                      <Select
-                        value={model.protocol ?? ''}
-                        options={protocolOptions}
-                        disabled={disabled}
-                        ariaLabel={t('config_management.visual.payload_rules.provider_type')}
-                        onChange={(nextValue) =>
-                          updateModel(ruleIndex, modelIndex, {
-                            protocol: (nextValue || undefined) as PayloadModelEntry['protocol'],
-                          })
-                        }
-                      />
-                    </>
-                  )}
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    className={styles.payloadRowActionButton}
-                    onClick={() => removeModel(ruleIndex, modelIndex)}
-                    disabled={disabled}
-                    title={t('config_management.visual.common.delete')}
-                    aria-label={t('config_management.visual.common.delete')}
-                  >
-                    <IconTrash2 size={16} />
-                  </Button>
-                </div>
-              ))}
-              {rule.models.length === 0 && (
-                <div className={styles.groupEmpty}>
-                  {t('config_management.visual.payload_rules.no_rules')}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className={styles.ruleGroup}>
-            <div className={styles.ruleGroupHeader}>
-              <div className={styles.ruleGroupTitle}>
-                <span className={styles.ruleGroupLabel}>
-                  {t('config_management.visual.payload_rules.params')}
-                </span>
-                <span className={styles.ruleGroupCount}>{rule.params.length}</span>
-              </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => addParam(ruleIndex)}
-                disabled={disabled}
-              >
-                {t('config_management.visual.payload_rules.add_param')}
-              </Button>
-            </div>
-            <div className={styles.ruleGroupBody}>
-              {rule.params.length > 0 && (
-                <div className={`${styles.groupRowHeader} ${styles.groupRowHeaderParam}`}>
-                  <span>{t('config_management.visual.payload_rules.json_path')}</span>
-                  <span>{t('config_management.visual.payload_rules.param_type')}</span>
-                  <span>{t('config_management.visual.payload_rules.value_default')}</span>
-                  <span className={styles.groupRowHeaderAction} />
-                </div>
-              )}
-              {(rule.params.length ? rule.params : []).map((param, paramIndex) => (
-                <div key={param.id} className={styles.payloadRuleParamRow}>
-                  <input
-                    className="input"
-                    placeholder={t('config_management.visual.payload_rules.json_path')}
-                    value={param.path}
-                    onChange={(e) => updateParam(ruleIndex, paramIndex, { path: e.target.value })}
-                    disabled={disabled}
-                  />
-                  <Select
-                    value={param.valueType}
-                    options={payloadValueTypeOptions}
-                    disabled={disabled}
-                    ariaLabel={t('config_management.visual.payload_rules.param_type')}
-                    onChange={(nextValue) =>
-                      updateParam(ruleIndex, paramIndex, {
-                        valueType: nextValue as PayloadParamValueType,
-                      })
-                    }
-                  />
-                  <input
-                    className="input"
-                    placeholder={getValuePlaceholder(param.valueType)}
-                    value={param.value}
-                    onChange={(e) => updateParam(ruleIndex, paramIndex, { value: e.target.value })}
-                    disabled={disabled}
-                  />
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    className={styles.payloadRowActionButton}
-                    onClick={() => removeParam(ruleIndex, paramIndex)}
-                    disabled={disabled}
-                    title={t('config_management.visual.common.delete')}
-                    aria-label={t('config_management.visual.common.delete')}
-                  >
-                    <IconTrash2 size={16} />
-                  </Button>
-                </div>
-              ))}
-              {rule.params.length === 0 && (
-                <div className={styles.groupEmpty}>
-                  {t('config_management.visual.payload_rules.no_rules')}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      ))}
-
-      {rules.length === 0 && (
-        <div className={styles.ruleEmpty}>
-          {t('config_management.visual.payload_rules.no_rules')}
-        </div>
-      )}
-
-      <div className={styles.actionsEnd}>
-        <Button variant="secondary" size="sm" onClick={addRule} disabled={disabled}>
-          {t('config_management.visual.payload_rules.add_rule')}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function PayloadFilterRulesEditor({
-  value,
-  disabled,
-  onChange,
-}: {
-  value: PayloadFilterRule[];
-  disabled?: boolean;
-  onChange: (next: PayloadFilterRule[]) => void;
-}) {
-  const { t } = useTranslation();
-  const rules = value.length ? value : [];
-  const protocolOptions = useMemo(
-    () =>
-      VISUAL_CONFIG_PROTOCOL_OPTIONS.map((option) => ({
-        value: option.value,
-        label: t(option.labelKey, { defaultValue: option.defaultLabel }),
-      })),
-    [t]
-  );
-
-  const addRule = () => onChange([...rules, { id: makeClientId(), models: [], params: [] }]);
-  const removeRule = (ruleIndex: number) => onChange(rules.filter((_, i) => i !== ruleIndex));
-
-  const updateRule = (ruleIndex: number, patch: Partial<PayloadFilterRule>) =>
-    onChange(rules.map((rule, i) => (i === ruleIndex ? { ...rule, ...patch } : rule)));
-
-  const addModel = (ruleIndex: number) => {
-    const rule = rules[ruleIndex];
-    const nextModel: PayloadModelEntry = { id: makeClientId(), name: '', protocol: undefined };
-    updateRule(ruleIndex, { models: [...rule.models, nextModel] });
-  };
-
-  const removeModel = (ruleIndex: number, modelIndex: number) => {
-    const rule = rules[ruleIndex];
-    updateRule(ruleIndex, { models: rule.models.filter((_, i) => i !== modelIndex) });
-  };
-
-  const updateModel = (ruleIndex: number, modelIndex: number, patch: Partial<PayloadModelEntry>) => {
-    const rule = rules[ruleIndex];
-    updateRule(ruleIndex, {
-      models: rule.models.map((m, i) => (i === modelIndex ? { ...m, ...patch } : m)),
-    });
-  };
-
-  const addParam = (ruleIndex: number) => {
-    const rule = rules[ruleIndex];
-    updateRule(ruleIndex, { params: [...rule.params, ''] });
-  };
-
-  const removeParam = (ruleIndex: number, paramIndex: number) => {
-    const rule = rules[ruleIndex];
-    updateRule(ruleIndex, { params: rule.params.filter((_, i) => i !== paramIndex) });
-  };
-
-  const updateParam = (ruleIndex: number, paramIndex: number, nextValue: string) => {
-    const rule = rules[ruleIndex];
-    updateRule(ruleIndex, {
-      params: rule.params.map((item, i) => (i === paramIndex ? nextValue : item)),
-    });
-  };
-
-  return (
-    <div className={styles.ruleEditor}>
-      {rules.map((rule, ruleIndex) => (
-        <div key={rule.id} className={styles.ruleCard}>
-          <div className={styles.ruleHeader}>
-            <div className={styles.ruleHeaderMain}>
-              <div className={styles.ruleTitle}>
-                {t('config_management.visual.payload_rules.rule')} {ruleIndex + 1}
-              </div>
-            </div>
-            <Button
-              variant="danger"
-              size="sm"
-              className={styles.iconActionButton}
-              onClick={() => removeRule(ruleIndex)}
-              disabled={disabled}
-              title={t('config_management.visual.common.delete')}
-              aria-label={t('config_management.visual.common.delete')}
-            >
-              <IconTrash2 size={16} />
-            </Button>
-          </div>
-
-          <div className={styles.ruleGroup}>
-            <div className={styles.ruleGroupHeader}>
-              <div className={styles.ruleGroupTitle}>
-                <span className={styles.ruleGroupLabel}>
-                  {t('config_management.visual.payload_rules.models')}
-                </span>
-                <span className={styles.ruleGroupCount}>{rule.models.length}</span>
-              </div>
-              <Button variant="secondary" size="sm" onClick={() => addModel(ruleIndex)} disabled={disabled}>
-                {t('config_management.visual.payload_rules.add_model')}
-              </Button>
-            </div>
-            <div className={styles.ruleGroupBody}>
-              {rule.models.length > 0 && (
-                <div className={`${styles.groupRowHeader} ${styles.groupRowHeaderFilterModel}`}>
-                  <span>{t('config_management.visual.payload_rules.model_name')}</span>
-                  <span>{t('config_management.visual.payload_rules.provider_type')}</span>
-                  <span className={styles.groupRowHeaderAction} />
-                </div>
-              )}
-              {rule.models.map((model, modelIndex) => (
-                <div key={model.id} className={styles.payloadFilterModelRow}>
-                  <input
-                    className="input"
-                    placeholder={t('config_management.visual.payload_rules.model_name')}
-                    value={model.name}
-                    onChange={(e) => updateModel(ruleIndex, modelIndex, { name: e.target.value })}
-                    disabled={disabled}
-                  />
-                  <Select
-                    value={model.protocol ?? ''}
-                    options={protocolOptions}
-                    disabled={disabled}
-                    ariaLabel={t('config_management.visual.payload_rules.provider_type')}
-                    onChange={(nextValue) =>
-                      updateModel(ruleIndex, modelIndex, {
-                        protocol: (nextValue || undefined) as PayloadModelEntry['protocol'],
-                      })
-                    }
-                  />
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    className={styles.payloadRowActionButton}
-                    onClick={() => removeModel(ruleIndex, modelIndex)}
-                    disabled={disabled}
-                    title={t('config_management.visual.common.delete')}
-                    aria-label={t('config_management.visual.common.delete')}
-                  >
-                    <IconTrash2 size={16} />
-                  </Button>
-                </div>
-              ))}
-              {rule.models.length === 0 && (
-                <div className={styles.groupEmpty}>
-                  {t('config_management.visual.payload_rules.no_rules')}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className={styles.ruleGroup}>
-            <div className={styles.ruleGroupHeader}>
-              <div className={styles.ruleGroupTitle}>
-                <span className={styles.ruleGroupLabel}>
-                  {t('config_management.visual.payload_rules.remove_params')}
-                </span>
-                <span className={styles.ruleGroupCount}>{rule.params.length}</span>
-              </div>
-              <Button variant="secondary" size="sm" onClick={() => addParam(ruleIndex)} disabled={disabled}>
-                {t('config_management.visual.payload_rules.add_param')}
-              </Button>
-            </div>
-            <div className={styles.ruleGroupBody}>
-              {rule.params.length > 0 && (
-                <div className={`${styles.groupRowHeader} ${styles.groupRowHeaderString}`}>
-                  <span>{t('config_management.visual.payload_rules.json_path_filter')}</span>
-                  <span className={styles.groupRowHeaderAction} />
-                </div>
-              )}
-              {rule.params.map((item, paramIndex) => (
-                <div key={`${rule.id}-${paramIndex}`} className={styles.stringRow}>
-                  <input
-                    placeholder={t('config_management.visual.payload_rules.json_path_filter')}
-                    value={item}
-                    onChange={(e) => updateParam(ruleIndex, paramIndex, e.target.value)}
-                    disabled={disabled}
-                    className={`${styles.stringInput} input`}
-                  />
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    className={styles.iconActionButton}
-                    onClick={() => removeParam(ruleIndex, paramIndex)}
-                    disabled={disabled}
-                    title={t('config_management.visual.common.delete')}
-                    aria-label={t('config_management.visual.common.delete')}
-                  >
-                    <IconTrash2 size={16} />
-                  </Button>
-                </div>
-              ))}
-              {rule.params.length === 0 && (
-                <div className={styles.groupEmpty}>
-                  {t('config_management.visual.payload_rules.no_rules')}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      ))}
-
-      {rules.length === 0 && (
-        <div className={styles.ruleEmpty}>
-          {t('config_management.visual.payload_rules.no_rules')}
-        </div>
-      )}
-
-      <div className={styles.actionsEnd}>
-        <Button variant="secondary" size="sm" onClick={addRule} disabled={disabled}>
-          {t('config_management.visual.payload_rules.add_rule')}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-export function VisualConfigEditor({ values, disabled = false, onChange }: VisualConfigEditorProps) {
-  const { t } = useTranslation();
+  const routingStrategyLabelId = useId();
+  const routingStrategyHintId = `${routingStrategyLabelId}-hint`;
+  const keepaliveInputId = useId();
+  const keepaliveHintId = `${keepaliveInputId}-hint`;
+  const keepaliveErrorId = `${keepaliveInputId}-error`;
+  const nonstreamKeepaliveInputId = useId();
+  const nonstreamKeepaliveHintId = `${nonstreamKeepaliveInputId}-hint`;
+  const nonstreamKeepaliveErrorId = `${nonstreamKeepaliveInputId}-error`;
   const isKeepaliveDisabled = values.streaming.keepaliveSeconds === '' || values.streaming.keepaliveSeconds === '0';
   const isNonstreamKeepaliveDisabled =
     values.streaming.nonstreamKeepaliveInterval === '' || values.streaming.nonstreamKeepaliveInterval === '0';
+  const portError = getValidationMessage(t, validationErrors?.port);
+  const logsMaxSizeError = getValidationMessage(t, validationErrors?.logsMaxTotalSizeMb);
+  const requestRetryError = getValidationMessage(t, validationErrors?.requestRetry);
+  const maxRetryIntervalError = getValidationMessage(t, validationErrors?.maxRetryInterval);
+  const keepaliveError = getValidationMessage(t, validationErrors?.['streaming.keepaliveSeconds']);
+  const bootstrapRetriesError = getValidationMessage(t, validationErrors?.['streaming.bootstrapRetries']);
+  const nonstreamKeepaliveError = getValidationMessage(
+    t,
+    validationErrors?.['streaming.nonstreamKeepaliveInterval']
+  );
+
+  const handleApiKeysTextChange = useCallback((apiKeysText: string) => onChange({ apiKeysText }), [onChange]);
+  const handlePayloadDefaultRulesChange = useCallback(
+    (payloadDefaultRules: PayloadRule[]) => onChange({ payloadDefaultRules }),
+    [onChange]
+  );
+  const handlePayloadOverrideRulesChange = useCallback(
+    (payloadOverrideRules: PayloadRule[]) => onChange({ payloadOverrideRules }),
+    [onChange]
+  );
+  const handlePayloadFilterRulesChange = useCallback(
+    (payloadFilterRules: PayloadFilterRule[]) => onChange({ payloadFilterRules }),
+    [onChange]
+  );
   const [expandedPayloadSections, setExpandedPayloadSections] = useState<Record<PayloadBlockKey, boolean>>({
     defaultRules: true,
     overrideRules: false,
@@ -951,6 +246,7 @@ export function VisualConfigEditor({ values, disabled = false, onChange }: Visua
               value={values.port}
               onChange={(e) => onChange({ port: e.target.value })}
               disabled={disabled}
+              error={portError}
             />
           </SectionGrid>
       </ConfigSection>
@@ -1029,21 +325,17 @@ export function VisualConfigEditor({ values, disabled = false, onChange }: Visua
       <ConfigSection title={t('config_management.visual.sections.auth.title')} description={t('config_management.visual.sections.auth.description')}>
           <div className={styles.sectionStack}>
             <Input
-              label={
-                <LabelWithHint
-                  label={t('config_management.visual.sections.auth.auth_dir')}
-                  hint={t('config_management.visual.sections.auth.auth_dir_hint')}
-                />
-              }
+              label={t('config_management.visual.sections.auth.auth_dir')}
               placeholder="~/.cli-proxy-api"
               value={values.authDir}
               onChange={(e) => onChange({ authDir: e.target.value })}
               disabled={disabled}
+              hint={t('config_management.visual.sections.auth.auth_dir_hint')}
             />
             <ApiKeysCardEditor
               value={values.apiKeysText}
               disabled={disabled}
-              onChange={(apiKeysText) => onChange({ apiKeysText })}
+              onChange={handleApiKeysTextChange}
             />
           </div>
       </ConfigSection>
@@ -1089,6 +381,7 @@ export function VisualConfigEditor({ values, disabled = false, onChange }: Visua
                 value={values.logsMaxTotalSizeMb}
                 onChange={(e) => onChange({ logsMaxTotalSizeMb: e.target.value })}
                 disabled={disabled}
+                error={logsMaxSizeError}
               />
             </div>
           </div>
@@ -1128,6 +421,7 @@ export function VisualConfigEditor({ values, disabled = false, onChange }: Visua
                 value={values.requestRetry}
                 onChange={(e) => onChange({ requestRetry: e.target.value })}
                 disabled={disabled}
+                error={requestRetryError}
               />
               <Input
                 label={t('config_management.visual.sections.network.max_retry_interval')}
@@ -1136,13 +430,11 @@ export function VisualConfigEditor({ values, disabled = false, onChange }: Visua
                 value={values.maxRetryInterval}
                 onChange={(e) => onChange({ maxRetryInterval: e.target.value })}
                 disabled={disabled}
+                error={maxRetryIntervalError}
               />
               <div className="form-group">
-                <label>
-                  <LabelWithHint
-                    label={t('config_management.visual.sections.network.routing_strategy')}
-                    hint={t('config_management.visual.sections.network.routing_strategy_hint')}
-                  />
+                <label id={routingStrategyLabelId} htmlFor={`${routingStrategyLabelId}-select`}>
+                  {t('config_management.visual.sections.network.routing_strategy')}
                 </label>
                 <Select
                   value={values.routingStrategy}
@@ -1150,12 +442,17 @@ export function VisualConfigEditor({ values, disabled = false, onChange }: Visua
                     { value: 'round-robin', label: t('config_management.visual.sections.network.strategy_round_robin') },
                     { value: 'fill-first', label: t('config_management.visual.sections.network.strategy_fill_first') },
                   ]}
+                  id={`${routingStrategyLabelId}-select`}
                   disabled={disabled}
-                  ariaLabel={t('config_management.visual.sections.network.routing_strategy')}
+                  ariaLabelledBy={routingStrategyLabelId}
+                  ariaDescribedBy={routingStrategyHintId}
                   onChange={(nextValue) =>
                     onChange({ routingStrategy: nextValue as VisualConfigValues['routingStrategy'] })
                   }
                 />
+                <div id={routingStrategyHintId} className="hint">
+                  {t('config_management.visual.sections.network.routing_strategy_hint')}
+                </div>
               </div>
             </div>
           </div>
@@ -1186,14 +483,12 @@ export function VisualConfigEditor({ values, disabled = false, onChange }: Visua
           <div className={styles.sectionStack}>
             <SectionGrid>
               <div className="form-group">
-                <label>
-                  <LabelWithHint
-                    label={t('config_management.visual.sections.streaming.keepalive_seconds')}
-                    hint={t('config_management.visual.sections.streaming.keepalive_hint')}
-                  />
+                <label htmlFor={keepaliveInputId}>
+                  {t('config_management.visual.sections.streaming.keepalive_seconds')}
                 </label>
                 <div className={styles.relativeField}>
                   <input
+                    id={keepaliveInputId}
                     className="input"
                     type="number"
                     placeholder="0"
@@ -1209,32 +504,35 @@ export function VisualConfigEditor({ values, disabled = false, onChange }: Visua
                     </span>
                   )}
                 </div>
+                {keepaliveError && (
+                  <div id={keepaliveErrorId} className="error-box">
+                    {keepaliveError}
+                  </div>
+                )}
+                <div id={keepaliveHintId} className="hint">
+                  {t('config_management.visual.sections.streaming.keepalive_hint')}
+                </div>
               </div>
               <Input
-                label={
-                  <LabelWithHint
-                    label={t('config_management.visual.sections.streaming.bootstrap_retries')}
-                    hint={t('config_management.visual.sections.streaming.bootstrap_hint')}
-                  />
-                }
+                label={t('config_management.visual.sections.streaming.bootstrap_retries')}
                 type="number"
                 placeholder="1"
                 value={values.streaming.bootstrapRetries}
                 onChange={(e) => onChange({ streaming: { ...values.streaming, bootstrapRetries: e.target.value } })}
                 disabled={disabled}
+                hint={t('config_management.visual.sections.streaming.bootstrap_hint')}
+                error={bootstrapRetriesError}
               />
             </SectionGrid>
 
             <SectionGrid>
               <div className="form-group">
-                <label>
-                  <LabelWithHint
-                    label={t('config_management.visual.sections.streaming.nonstream_keepalive')}
-                    hint={t('config_management.visual.sections.streaming.nonstream_keepalive_hint')}
-                  />
+                <label htmlFor={nonstreamKeepaliveInputId}>
+                  {t('config_management.visual.sections.streaming.nonstream_keepalive')}
                 </label>
                 <div className={styles.relativeField}>
                   <input
+                    id={nonstreamKeepaliveInputId}
                     className="input"
                     type="number"
                     placeholder="0"
@@ -1251,6 +549,14 @@ export function VisualConfigEditor({ values, disabled = false, onChange }: Visua
                       {t('config_management.visual.sections.streaming.disabled')}
                     </span>
                   )}
+                </div>
+                {nonstreamKeepaliveError && (
+                  <div id={nonstreamKeepaliveErrorId} className="error-box">
+                    {nonstreamKeepaliveError}
+                  </div>
+                )}
+                <div id={nonstreamKeepaliveHintId} className="hint">
+                  {t('config_management.visual.sections.streaming.nonstream_keepalive_hint')}
                 </div>
               </div>
             </SectionGrid>
@@ -1269,7 +575,7 @@ export function VisualConfigEditor({ values, disabled = false, onChange }: Visua
             <PayloadRulesEditor
               value={values.payloadDefaultRules}
               disabled={disabled}
-              onChange={(payloadDefaultRules) => onChange({ payloadDefaultRules })}
+              onChange={handlePayloadDefaultRulesChange}
             />
           </PayloadSectionBlock>
 
@@ -1284,7 +590,7 @@ export function VisualConfigEditor({ values, disabled = false, onChange }: Visua
               value={values.payloadOverrideRules}
               disabled={disabled}
               protocolFirst
-              onChange={(payloadOverrideRules) => onChange({ payloadOverrideRules })}
+              onChange={handlePayloadOverrideRulesChange}
             />
           </PayloadSectionBlock>
 
@@ -1298,7 +604,7 @@ export function VisualConfigEditor({ values, disabled = false, onChange }: Visua
             <PayloadFilterRulesEditor
               value={values.payloadFilterRules}
               disabled={disabled}
-              onChange={(payloadFilterRules) => onChange({ payloadFilterRules })}
+              onChange={handlePayloadFilterRulesChange}
             />
           </PayloadSectionBlock>
         </div>

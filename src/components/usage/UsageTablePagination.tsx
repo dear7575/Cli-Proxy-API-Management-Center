@@ -21,7 +21,7 @@ export function UsageTablePagination({
   pageSize,
   onPageChange,
   onPageSizeChange,
-  pageSizeOptions = [10, 20, 50],
+  pageSizeOptions = [10, 30, 50, 100],
   disabled = false,
 }: UsageTablePaginationProps) {
   const { t } = useTranslation();

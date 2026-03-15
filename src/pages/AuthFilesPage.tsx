@@ -27,6 +27,7 @@ import {
   formatModified,
   getTypeColor,
   getTypeLabel,
+  hasAuthFileStatusMessage,
   isRuntimeOnlyAuthFile,
   resolveAuthFileStats,
   type ResolvedTheme,
@@ -48,7 +49,7 @@ import type { AuthFileItem } from '@/types';
 import styles from './AuthFilesPage.module.scss';
 
 const DEFAULT_PAGE_SIZE = 10;
-const PAGE_SIZE_OPTIONS = [10, 20, 30] as const;
+const PAGE_SIZE_OPTIONS = [10, 30, 50, 100] as const;
 
 type PaginationItem = number | 'left-ellipsis' | 'right-ellipsis';
 type StatsSortKey = 'success' | 'failure';
@@ -64,6 +65,7 @@ export function AuthFilesPage() {
   const navigate = useNavigate();
 
   const [filter, setFilter] = useState<'all' | string>('all');
+  const [problemOnly, setProblemOnly] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
   const [statsSort, setStatsSort] = useState<{ key: StatsSortKey; direction: StatsSortDirection } | null>(null);
@@ -149,6 +151,9 @@ export function AuthFilesPage() {
     if (typeof persisted.filter === 'string' && persisted.filter.trim()) {
       setFilter(persisted.filter);
     }
+    if (typeof persisted.problemOnly === 'boolean') {
+      setProblemOnly(persisted.problemOnly);
+    }
     if (typeof persisted.search === 'string') {
       setSearch(persisted.search);
     }
@@ -161,8 +166,8 @@ export function AuthFilesPage() {
   }, []);
 
   useEffect(() => {
-    writeAuthFilesUiState({ filter, search, page, pageSize });
-  }, [filter, search, page, pageSize]);
+    writeAuthFilesUiState({ filter, problemOnly, search, page, pageSize });
+  }, [filter, problemOnly, search, page, pageSize]);
 
   const handleHeaderRefresh = useCallback(async () => {
     await Promise.all([loadFiles(), refreshKeyStats(), loadExcluded(), loadModelAlias()]);
@@ -185,9 +190,14 @@ export function AuthFilesPage() {
     isCurrentLayer ? 240_000 : null
   );
 
+  const filesMatchingProblemFilter = useMemo(
+    () => (problemOnly ? files.filter(hasAuthFileStatusMessage) : files),
+    [files, problemOnly]
+  );
+
   const existingTypes = useMemo(() => {
     const types = new Set<string>(['all']);
-    files.forEach((file) => {
+    filesMatchingProblemFilter.forEach((file) => {
       if (file.type) {
         types.add(file.type);
       }
@@ -198,7 +208,7 @@ export function AuthFilesPage() {
         .filter((type) => type !== 'all')
         .sort((left, right) => left.localeCompare(right)),
     ];
-  }, [files]);
+  }, [filesMatchingProblemFilter]);
 
   const typeFilterOptions = useMemo(
     () =>
@@ -208,11 +218,19 @@ export function AuthFilesPage() {
       })),
     [existingTypes, t]
   );
+  const pageSizeSelectOptions = useMemo(
+    () =>
+      PAGE_SIZE_OPTIONS.map((size) => ({
+        value: String(size),
+        label: t('ai_providers.page_size_option', { defaultValue: `${size} 条`, count: size }),
+      })),
+    [t]
+  );
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
 
-    const filteredItems = files.filter((item) => {
+    const filteredItems = filesMatchingProblemFilter.filter((item) => {
       const matchType = filter === 'all' || item.type === filter;
       const matchStatus =
         statusFilter === 'all' ||
@@ -240,14 +258,14 @@ export function AuthFilesPage() {
       }
       return left.name.localeCompare(right.name);
     });
-  }, [files, filter, keyStats, search, statsSort, statusFilter]);
+  }, [filesMatchingProblemFilter, filter, keyStats, search, statsSort, statusFilter]);
 
   const toggleStatsSort = useCallback((key: StatsSortKey) => {
     setStatsSort((prev) => {
       if (!prev || prev.key !== key) {
         return { key, direction: 'desc' };
       }
-      return { key, direction: prev.direction === 'desc' ? 'asc' : 'desc' };
+      return { key: prev.key, direction: prev.direction === 'desc' ? 'asc' : 'desc' };
     });
   }, []);
 
@@ -258,7 +276,6 @@ export function AuthFilesPage() {
     },
     [statsSort]
   );
-
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pageStart = (currentPage - 1) * pageSize;
@@ -316,7 +333,7 @@ export function AuthFilesPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [filter, search, statusFilter, pageSize]);
+  }, [filter, problemOnly, search, statusFilter, pageSize]);
 
   useEffect(() => {
     if (page <= totalPages) return;
@@ -352,6 +369,7 @@ export function AuthFilesPage() {
     setSearch('');
     setFilter('all');
     setStatusFilter('all');
+    setProblemOnly(false);
     setPageSize(DEFAULT_PAGE_SIZE);
     setPage(1);
   };
@@ -411,6 +429,14 @@ export function AuthFilesPage() {
     </div>
   );
 
+  const deleteAllButtonLabel = problemOnly
+    ? filter === 'all'
+      ? t('auth_files.delete_problem_button')
+      : t('auth_files.delete_problem_button_with_type', { type: getTypeLabel(t, filter) })
+    : filter === 'all'
+      ? t('auth_files.delete_all_button')
+      : `${t('common.delete')} ${getTypeLabel(t, filter)}`;
+
   return (
     <div className={styles.container}>
       <div className={styles.pageHeader}>
@@ -437,14 +463,17 @@ export function AuthFilesPage() {
               variant="danger"
               size="sm"
               onClick={() =>
-                handleDeleteAll({ filter, onResetFilterToAll: () => setFilter('all') })
+                handleDeleteAll({
+                  filter,
+                  problemOnly,
+                  onResetFilterToAll: () => setFilter('all'),
+                  onResetProblemOnly: () => setProblemOnly(false),
+                })
               }
               disabled={disableControls || loading || deletingAll}
               loading={deletingAll}
             >
-              {filter === 'all'
-                ? t('auth_files.delete_all_button')
-                : `${t('common.delete')} ${getTypeLabel(t, filter)}`}
+              {deleteAllButtonLabel}
             </Button>
             <input
               ref={fileInputRef}
@@ -500,6 +529,18 @@ export function AuthFilesPage() {
                 onClick={() => setStatusFilter('disabled')}
               >
                 {t('ai_providers.list_filter_disabled', { defaultValue: '停用' })}
+              </Button>
+            </div>
+            <div className="provider-list-status-group">
+              <Button
+                size="sm"
+                variant={problemOnly ? 'primary' : 'secondary'}
+                onClick={() => {
+                  setProblemOnly((prev) => !prev);
+                  setPage(1);
+                }}
+              >
+                {t('auth_files.problem_filter_only')}
               </Button>
             </div>
             <Button
@@ -801,27 +842,10 @@ export function AuthFilesPage() {
 
         {!loading && filtered.length > 0 ? (
           <div className="provider-list-pagination pagination">
-            <span className="provider-list-pagination-meta">
-              {filtered.length} {t('auth_files.files_count')}
-            </span>
             <div className="provider-list-pagination-controls">
-              <div className="provider-list-page-size">
-                <select
-                  className="input provider-list-page-size-select"
-                  value={pageSize}
-                  onChange={(event) => {
-                    const next = Number(event.target.value);
-                    if (!Number.isFinite(next) || next <= 0) return;
-                    setPageSize(next);
-                  }}
-                >
-                  {PAGE_SIZE_OPTIONS.map((size) => (
-                    <option key={size} value={size}>
-                      {size}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <span className="provider-list-pagination-meta">
+                {filtered.length} {t('auth_files.files_count')}
+              </span>
               <Button
                 variant="secondary"
                 size="sm"
@@ -848,10 +872,13 @@ export function AuthFilesPage() {
                     <Button
                       key={item}
                       size="sm"
-                      variant={isActive ? 'primary' : 'secondary'}
-                      className="provider-list-page-button"
-                      onClick={() => setPage(item)}
-                      disabled={isActive}
+                      variant="secondary"
+                      className={`provider-list-page-button ${isActive ? 'provider-list-page-button-current' : ''}`.trim()}
+                      onClick={() => {
+                        if (isActive) return;
+                        setPage(item);
+                      }}
+                      aria-current={isActive ? 'page' : undefined}
                     >
                       {item}
                     </Button>
@@ -866,6 +893,20 @@ export function AuthFilesPage() {
               >
                 {t('auth_files.pagination_next')}
               </Button>
+              <div className="provider-list-page-size">
+                <Select
+                  value={String(pageSize)}
+                  options={pageSizeSelectOptions}
+                  onChange={(value) => {
+                    const next = Number(value);
+                    if (!Number.isFinite(next) || next <= 0) return;
+                    setPageSize(next);
+                  }}
+                  className="provider-list-page-size-select"
+                  ariaLabel={t('auth_files.page_size_label', { defaultValue: '单页数量' })}
+                  fullWidth={false}
+                />
+              </div>
             </div>
           </div>
         ) : null}

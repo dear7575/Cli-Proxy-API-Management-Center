@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconPencil, IconTrash2 } from '@/components/ui/icons';
+import { Select } from '@/components/ui/Select';
 
 interface ProviderSortOption<T> {
   value: string;
@@ -150,7 +151,15 @@ export function ProviderList<T>({
   const defaultSortValue = sortOptions?.[0]?.value ?? 'default';
   const hasActiveFilters =
     normalizedSearch.length > 0 || statusFilter !== 'all' || (sortOptions?.length ? sortBy !== defaultSortValue : false);
-  const pageSizeOptions = [10, 20, 50];
+  const pageSizeOptions = [10, 30, 50, 100];
+  const pageSizeSelectOptions = useMemo(
+    () =>
+      pageSizeOptions.map((option) => ({
+        value: String(option),
+        label: t('ai_providers.page_size_option', { defaultValue: `${option} 条`, count: option })
+      })),
+    [pageSizeOptions, t]
+  );
   const paginationItems = useMemo<Array<number | 'left-ellipsis' | 'right-ellipsis'>>(() => {
     if (totalPages <= 7) {
       return Array.from({ length: totalPages }, (_, index) => index + 1);
@@ -605,11 +614,13 @@ export function ProviderList<T>({
               return (
                 <Button
                   key={item}
-                  variant={isCurrent ? 'primary' : 'secondary'}
+                  variant="secondary"
                   size="sm"
-                  className="provider-list-page-button"
-                  onClick={() => setPage(item)}
-                  disabled={isCurrent}
+                  className={`provider-list-page-button ${isCurrent ? 'provider-list-page-button-current' : ''}`.trim()}
+                  onClick={() => {
+                    if (isCurrent) return;
+                    setPage(item);
+                  }}
                   aria-current={isCurrent ? 'page' : undefined}
                 >
                   {item}
@@ -625,20 +636,17 @@ export function ProviderList<T>({
           >
             {t('auth_files.pagination_next', { defaultValue: '下一页' })}
           </Button>
-          <label className="provider-list-page-size">
-            <select
-              className="input provider-list-page-size-select"
-              value={pageSizeValue}
-              onChange={(event) => handlePageSizeChange(Number(event.target.value))}
+          <div className="provider-list-page-size">
+            <Select
+              value={String(pageSizeValue)}
+              options={pageSizeSelectOptions}
+              onChange={(value) => handlePageSizeChange(Number(value))}
+              className="provider-list-page-size-select"
               disabled={actionsDisabled || bulkBusy}
-            >
-              {pageSizeOptions.map((option) => (
-                <option key={option} value={option}>
-                  {t('ai_providers.page_size_option', { defaultValue: `${option} 条`, count: option })}
-                </option>
-              ))}
-            </select>
-          </label>
+              ariaLabel={t('auth_files.page_size_label', { defaultValue: '单页数量' })}
+              fullWidth={false}
+            />
+          </div>
         </div>
       </div>
     </div>

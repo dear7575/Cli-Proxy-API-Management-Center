@@ -8,17 +8,23 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
+import { Select } from '@/components/ui/Select';
 import { triggerHeaderRefresh } from '@/hooks/useHeaderRefresh';
-import { useQuotaStore, useThemeStore } from '@/stores';
+import { useNotificationStore, useQuotaStore, useThemeStore } from '@/stores';
 import type { AuthFileItem, ResolvedTheme, ThemeColors } from '@/types';
 import { TYPE_COLORS, formatKimiResetHint, formatQuotaResetTime } from '@/utils/quota';
 import { formatFileSize } from '@/utils/format';
-import { formatModified } from '@/features/authFiles/constants';
+import {
+  formatModified,
+  hasAuthFileStatusMessage,
+  isRuntimeOnlyAuthFile
+} from '@/features/authFiles/constants';
 import { CountTooltipCell } from '@/components/providers/CountTooltipCell';
 import { QuotaProgressBar, type QuotaStatusState } from './QuotaCard';
 import { useQuotaLoader } from './useQuotaLoader';
 import type { QuotaConfig } from './quotaConfigs';
 import { IconEye, IconRefreshCw } from '@/components/ui/icons';
+import { authFilesApi } from '@/services/api';
 import styles from '@/pages/QuotaPage.module.scss';
 import type {
   AntigravityQuotaGroup,
@@ -40,8 +46,9 @@ type QuotaSetter<T> = (updater: QuotaUpdater<T>) => void;
 type PaginationItem = number | 'left-ellipsis' | 'right-ellipsis';
 
 const DEFAULT_PAGE_SIZE = 10;
-const PAGE_SIZE_OPTIONS = [10, 20, 30, 50];
-const MAX_ITEMS_PER_PAGE = 50;
+const PAGE_SIZE_OPTIONS = [10, 30, 50, 100];
+const MAX_ITEMS_PER_PAGE = 100;
+const REFRESH_CHUNK_SIZE = 10;
 
 interface QuotaMetric {
   label: string;
@@ -124,6 +131,7 @@ interface QuotaSectionProps<TState extends QuotaStatusState, TData> {
   files: AuthFileItem[];
   loading: boolean;
   disabled: boolean;
+  onFilesRefresh?: () => void | Promise<void>;
 }
 
 const resolveQuotaErrorMessage = (
@@ -146,18 +154,84 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   config,
   files,
   loading,
-  disabled
+  disabled,
+  onFilesRefresh
 }: QuotaSectionProps<TState, TData>) {
   const { t } = useTranslation();
+  const { showNotification, showConfirmation } = useNotificationStore();
   const resolvedTheme: ResolvedTheme = useThemeStore((state) => state.resolvedTheme);
   const setQuota = useQuotaStore((state) => state[config.storeSetter]) as QuotaSetter<
     Record<string, TState>
   >;
+  const { quota, loadQuota } = useQuotaLoader(config);
 
   const filteredFiles = useMemo(() => files.filter((file) => config.filterFn(file)), [
     files,
     config
   ]);
+  const [filter, setFilter] = useState<'all' | string>('all');
+  const [problemOnly, setProblemOnly] = useState(false);
+  const [auth401Only, setAuth401Only] = useState(false);
+  const [auth502Only, setAuth502Only] = useState(false);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, boolean>>({});
+  const [batchDeleting, setBatchDeleting] = useState(false);
+  const [batchUpdating, setBatchUpdating] = useState(false);
+  const [bulkRefreshing, setBulkRefreshing] = useState(false);
+  const [bulkRefreshProgress, setBulkRefreshProgress] = useState<{ done: number; total: number } | null>(null);
+  const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set());
+  const filesMatchingProblemFilter = useMemo(
+    () => (problemOnly ? filteredFiles.filter(hasAuthFileStatusMessage) : filteredFiles),
+    [filteredFiles, problemOnly]
+  );
+  const existingTypes = useMemo(() => {
+    const types = new Set<string>(['all']);
+    filesMatchingProblemFilter.forEach((file) => {
+      if (file.type) {
+        types.add(file.type);
+      }
+    });
+    return [
+      'all',
+      ...Array.from(types)
+        .filter((type) => type !== 'all')
+        .sort((left, right) => left.localeCompare(right))
+    ];
+  }, [filesMatchingProblemFilter]);
+
+  useEffect(() => {
+    if (filter === 'all') return;
+    if (existingTypes.includes(filter)) return;
+    setFilter('all');
+  }, [existingTypes, filter]);
+
+  const filteredFilesByControls = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return filesMatchingProblemFilter.filter((item) => {
+      const effectiveDisabled = statusOverrides[item.name] ?? item.disabled;
+      const matchType = filter === 'all' || item.type === filter;
+      const matchStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'enabled' ? !effectiveDisabled : Boolean(effectiveDisabled));
+      const quotaState = quota[item.name] as QuotaStatusState | undefined;
+      const errorText = typeof quotaState?.error === 'string' ? quotaState.error : '';
+      const has401 =
+        quotaState?.status === 'error' &&
+        (quotaState.errorStatus === 401 || errorText.toLowerCase().includes('401'));
+      const has502 =
+        quotaState?.status === 'error' &&
+        (quotaState.errorStatus === 502 || errorText.toLowerCase().includes('502'));
+      const matchAuthError =
+        (!auth401Only && !auth502Only) || (auth401Only && has401) || (auth502Only && has502);
+      const matchSearch =
+        !term ||
+        item.name.toLowerCase().includes(term) ||
+        (item.type || '').toString().toLowerCase().includes(term) ||
+        (item.provider || '').toString().toLowerCase().includes(term);
+      return matchType && matchStatus && matchAuthError && matchSearch;
+    });
+  }, [filesMatchingProblemFilter, filter, search, statusFilter, auth401Only, auth502Only, quota, statusOverrides]);
   const isCodexSection = config.type === 'codex';
   const isAntigravitySection = config.type === 'antigravity';
   const showSecondaryQuotaColumn = !isAntigravitySection;
@@ -174,7 +248,16 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
     goToNext,
     loading: sectionLoading,
     setLoading
-  } = useQuotaPagination(filteredFiles, DEFAULT_PAGE_SIZE);
+  } = useQuotaPagination(filteredFilesByControls, DEFAULT_PAGE_SIZE);
+
+  const pageSizeSelectOptions = useMemo(
+    () =>
+      PAGE_SIZE_OPTIONS.map((size) => ({
+        value: String(size),
+        label: t('ai_providers.page_size_option', { defaultValue: `${size} 条`, count: size })
+      })),
+    [t]
+  );
 
   const paginationItems = useMemo<PaginationItem[]>(() => {
     if (totalPages <= 7) {
@@ -211,14 +294,34 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
 
   useEffect(() => {
     setPage(1);
-  }, [setPage, filteredFiles.length]);
+  }, [setPage, filteredFilesByControls.length]);
+
+  useEffect(() => {
+    setPage(1);
+    setSelectedNames(new Set());
+  }, [filter, problemOnly, auth401Only, auth502Only, search, statusFilter, setPage]);
 
   useEffect(() => {
     if (currentPage <= totalPages) return;
     setPage(totalPages);
   }, [currentPage, totalPages, setPage]);
 
-  const { quota, loadQuota } = useQuotaLoader(config);
+  useEffect(() => {
+    if (selectedNames.size === 0) return;
+    const validNames = new Set(filteredFilesByControls.map((item) => item.name));
+    setSelectedNames((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      prev.forEach((name) => {
+        if (validNames.has(name)) {
+          next.add(name);
+        } else {
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [filteredFilesByControls, selectedNames.size]);
 
   const pendingQuotaRefreshRef = useRef(false);
   const prevFilesLoadingRef = useRef(loading);
@@ -278,6 +381,29 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
     },
     [t]
   );
+
+  const typeFilterOptions = useMemo(
+    () =>
+      existingTypes.map((type) => ({
+        value: type,
+        label: getTypeLabel(type)
+      })),
+    [existingTypes, getTypeLabel]
+  );
+
+  const selectableFilteredNames = useMemo(
+    () => filteredFilesByControls.filter((item) => !isRuntimeOnlyAuthFile(item)).map((item) => item.name),
+    [filteredFilesByControls]
+  );
+  const selectablePageNames = useMemo(
+    () => pageItems.filter((item) => !isRuntimeOnlyAuthFile(item)).map((item) => item.name),
+    [pageItems]
+  );
+  const hasSelection = selectedNames.size > 0;
+  const isCurrentPageFullySelected =
+    selectablePageNames.length > 0 && selectablePageNames.every((name) => selectedNames.has(name));
+  const isAllFilteredSelected =
+    selectableFilteredNames.length > 0 && selectableFilteredNames.every((name) => selectedNames.has(name));
 
   const renderQuotaMetric = useCallback((metric: QuotaMetric | null) => {
     if (!metric) {
@@ -443,7 +569,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   const antigravityDetailData = useMemo(() => {
     if (config.type !== 'antigravity' || !antigravityDetailFileName) return null;
 
-    const file = filteredFiles.find((item) => item.name === antigravityDetailFileName);
+    const file = filteredFilesByControls.find((item) => item.name === antigravityDetailFileName);
     if (!file) return null;
 
     const groups = resolveAntigravityGroups(file.name);
@@ -468,7 +594,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   }, [
     antigravityDetailFileName,
     config.type,
-    filteredFiles,
+    filteredFilesByControls,
     resolveAntigravityGroups,
     resolveAntigravitySummary
   ]);
@@ -624,22 +750,172 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
     ]
   );
 
-  const refreshSingleFileQuota = useCallback(
-    (file: AuthFileItem) => {
-      if (disabled || sectionLoading || loading) return;
-      void loadQuota([file], 'page', setLoading);
+  const applySelection = useCallback((names: string[], shouldSelect: boolean) => {
+    setSelectedNames((prev) => {
+      const next = new Set(prev);
+      names.forEach((name) => {
+        if (shouldSelect) {
+          next.add(name);
+        } else {
+          next.delete(name);
+        }
+      });
+      return next;
+    });
+  }, []);
+
+  const toggleSelect = useCallback((name: string) => {
+    setSelectedNames((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) {
+        next.delete(name);
+      } else {
+        next.add(name);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleCurrentPageSelection = useCallback(() => {
+    if (selectablePageNames.length === 0) return;
+    applySelection(selectablePageNames, !isCurrentPageFullySelected);
+  }, [applySelection, isCurrentPageFullySelected, selectablePageNames]);
+
+  const toggleAllFilteredSelection = useCallback(() => {
+    if (selectableFilteredNames.length === 0) return;
+    applySelection(selectableFilteredNames, !isAllFilteredSelected);
+  }, [applySelection, isAllFilteredSelected, selectableFilteredNames]);
+
+
+  const batchSetStatus = useCallback(
+    async (names: string[], enabled: boolean) => {
+      const uniqueNames = Array.from(new Set(names));
+      if (uniqueNames.length === 0) return;
+      if (disabled) return;
+
+      const nextDisabled = !enabled;
+      setBatchUpdating(true);
+      setStatusOverrides((prev) => {
+        const next = { ...prev };
+        uniqueNames.forEach((name) => {
+          next[name] = nextDisabled;
+        });
+        return next;
+      });
+      try {
+        const results = await Promise.allSettled(
+          uniqueNames.map((name) => authFilesApi.setStatus(name, nextDisabled))
+        );
+
+        let successCount = 0;
+        let failCount = 0;
+        results.forEach((result) => {
+          if (result.status === 'fulfilled') {
+            successCount += 1;
+          } else {
+            failCount += 1;
+          }
+        });
+
+        if (failCount === 0) {
+          showNotification(t('auth_files.batch_status_success', { count: successCount }), 'success');
+        } else {
+          showNotification(
+            t('auth_files.batch_status_partial', { success: successCount, failed: failCount }),
+            failCount === uniqueNames.length ? 'error' : 'warning'
+          );
+        }
+
+        await onFilesRefresh?.();
+      } finally {
+        setBatchUpdating(false);
+        setStatusOverrides((prev) => {
+          const next = { ...prev };
+          uniqueNames.forEach((name) => {
+            delete next[name];
+          });
+          return next;
+        });
+      }
     },
-    [disabled, loadQuota, loading, sectionLoading, setLoading]
+    [disabled, onFilesRefresh, showNotification, t]
   );
+
+  const batchDelete = useCallback(
+    (names: string[]) => {
+      const uniqueNames = Array.from(new Set(names));
+      if (uniqueNames.length === 0) return;
+      if (disabled) return;
+
+      showConfirmation({
+        title: t('auth_files.batch_delete_title'),
+        message: t('auth_files.batch_delete_confirm', { count: uniqueNames.length }),
+        variant: 'danger',
+        confirmText: t('common.confirm'),
+        onConfirm: async () => {
+          setBatchDeleting(true);
+          try {
+            const results = await Promise.allSettled(
+              uniqueNames.map((name) => authFilesApi.deleteFile(name))
+            );
+            const successCount = results.filter((result) => result.status === 'fulfilled').length;
+            const failCount = uniqueNames.length - successCount;
+
+            if (failCount === 0) {
+              showNotification(t('auth_files.delete_success'), 'success');
+            } else {
+              showNotification(
+                t('auth_files.batch_status_partial', { success: successCount, failed: failCount }),
+                failCount === uniqueNames.length ? 'error' : 'warning'
+              );
+            }
+
+            await onFilesRefresh?.();
+            setSelectedNames(new Set());
+          } finally {
+            setBatchDeleting(false);
+          }
+        }
+      });
+    },
+    [disabled, onFilesRefresh, showConfirmation, showNotification, t]
+  );
+
+  const refreshFilteredQuota = useCallback(async () => {
+    if (disabled || bulkRefreshing) return;
+    const targets = filteredFilesByControls;
+    if (targets.length === 0) return;
+
+    setBulkRefreshing(true);
+    setBulkRefreshProgress({ done: 0, total: targets.length });
+    try {
+      for (let index = 0; index < targets.length; index += REFRESH_CHUNK_SIZE) {
+        const chunk = targets.slice(index, index + REFRESH_CHUNK_SIZE);
+        await loadQuota(chunk, 'all', setLoading);
+        setBulkRefreshProgress({
+          done: Math.min(index + chunk.length, targets.length),
+          total: targets.length
+        });
+      }
+    } finally {
+      setBulkRefreshing(false);
+      setBulkRefreshProgress(null);
+    }
+  }, [disabled, bulkRefreshing, filteredFilesByControls, loadQuota, setLoading]);
 
   const titleNode = (
     <div className={styles.titleWrapper}>
       <span>{t(`${config.i18nPrefix}.title`)}</span>
-      {filteredFiles.length > 0 && <span className={styles.countBadge}>{filteredFiles.length}</span>}
+      {filteredFilesByControls.length > 0 && (
+        <span className={styles.countBadge}>{filteredFilesByControls.length}</span>
+      )}
     </div>
   );
 
-  const isRefreshing = sectionLoading || loading;
+  const isRefreshing = sectionLoading || loading || bulkRefreshing;
+  const bulkBusy = batchDeleting || batchUpdating || bulkRefreshing;
+  const disableBulkControls = disabled || isRefreshing || bulkBusy;
+  const disableSelection = disabled || isRefreshing || bulkBusy;
 
   return (
     <Card
@@ -660,30 +936,188 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
         </Button>
       }
     >
+      <div className={`provider-list-toolbar ${styles.quotaTableToolbar}`}>
+        <div className="provider-list-toolbar-left">
+          <div className="provider-list-search">
+            <input
+              className="input"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={t('auth_files.search_placeholder')}
+            />
+          </div>
+          <div className={styles.quotaTypeFilter}>
+            <Select
+              value={filter}
+              options={typeFilterOptions}
+              onChange={(value) => setFilter(value)}
+              className={styles.quotaTypeSelect}
+              ariaLabel={t('auth_files.file_type', { defaultValue: '类型' })}
+              fullWidth={false}
+            />
+          </div>
+          <div className="provider-list-status-group">
+            <Button
+              size="sm"
+              variant={statusFilter === 'all' ? 'primary' : 'secondary'}
+              onClick={() => setStatusFilter('all')}
+            >
+              {t('ai_providers.list_filter_all', { defaultValue: '全部' })}
+            </Button>
+            <Button
+              size="sm"
+              variant={statusFilter === 'enabled' ? 'primary' : 'secondary'}
+              onClick={() => setStatusFilter('enabled')}
+            >
+              {t('ai_providers.list_filter_enabled', { defaultValue: '启用' })}
+            </Button>
+            <Button
+              size="sm"
+              variant={statusFilter === 'disabled' ? 'primary' : 'secondary'}
+              onClick={() => setStatusFilter('disabled')}
+            >
+              {t('ai_providers.list_filter_disabled', { defaultValue: '停用' })}
+            </Button>
+          </div>
+          <div className="provider-list-status-group">
+            <Button
+              size="sm"
+              variant={problemOnly ? 'primary' : 'secondary'}
+              onClick={() => setProblemOnly((prev) => !prev)}
+            >
+              {t('auth_files.problem_filter_only')}
+            </Button>
+            <Button
+              size="sm"
+              variant={auth401Only ? 'primary' : 'secondary'}
+              onClick={() => setAuth401Only((prev) => !prev)}
+            >
+              {t('quota_management.filter_error_401', { defaultValue: '401' })}
+            </Button>
+            <Button
+              size="sm"
+              variant={auth502Only ? 'primary' : 'secondary'}
+              onClick={() => setAuth502Only((prev) => !prev)}
+            >
+              {t('quota_management.filter_error_502', { defaultValue: '502' })}
+            </Button>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSearch('');
+              setFilter('all');
+              setStatusFilter('all');
+              setProblemOnly(false);
+              setAuth401Only(false);
+              setAuth502Only(false);
+              setSelectedNames(new Set());
+            }}
+            className="provider-list-reset-btn"
+          >
+            {t('ai_providers.list_reset_filters', { defaultValue: '重置' })}
+          </Button>
+        </div>
+        <div className="provider-list-toolbar-right">
+          {hasSelection ? (
+            <span className="provider-list-selected-count">
+              {t('auth_files.batch_selected', { count: selectedNames.size })}
+            </span>
+          ) : null}
+          <div className="provider-list-selection-group">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={toggleCurrentPageSelection}
+              disabled={disableSelection || selectablePageNames.length === 0}
+            >
+              {isCurrentPageFullySelected
+                ? t('ai_providers.list_deselect_page')
+                : t('ai_providers.list_select_page')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={toggleAllFilteredSelection}
+              disabled={disableSelection || selectableFilteredNames.length === 0}
+            >
+              {isAllFilteredSelected
+                ? t('ai_providers.list_deselect_all', { defaultValue: '取消全部' })
+                : t('ai_providers.list_select_all')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void refreshFilteredQuota()}
+              loading={bulkRefreshing}
+              disabled={disableBulkControls || filteredFilesByControls.length === 0}
+            >
+              {bulkRefreshProgress
+                ? `${t('quota_management.refresh_filtered', { defaultValue: '刷新筛选' })} (${bulkRefreshProgress.done}/${bulkRefreshProgress.total})`
+                : t('quota_management.refresh_filtered', { defaultValue: '刷新筛选' })}
+            </Button>
+          </div>
+          <div className="provider-list-bulk-actions">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void batchSetStatus(Array.from(selectedNames), true)}
+              disabled={disableBulkControls || !hasSelection}
+            >
+              {t('auth_files.batch_enable')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void batchSetStatus(Array.from(selectedNames), false)}
+              disabled={disableBulkControls || !hasSelection}
+            >
+              {t('auth_files.batch_disable')}
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => batchDelete(Array.from(selectedNames))}
+              disabled={disableBulkControls || !hasSelection}
+            >
+              {t('common.delete')}
+            </Button>
+          </div>
+        </div>
+      </div>
+
       {filteredFiles.length === 0 ? (
         <EmptyState
           title={t(`${config.i18nPrefix}.empty_title`)}
           description={t(`${config.i18nPrefix}.empty_desc`)}
+        />
+      ) : filteredFilesByControls.length === 0 ? (
+        <EmptyState
+          title={t('auth_files.search_empty_title')}
+          description={t('auth_files.search_empty_desc')}
         />
       ) : (
         <>
           <div className={styles.quotaTableWrapper}>
             <table className={`${styles.quotaTable} ${isCodexSection ? styles.quotaTableCodex : ''}`}>
               <colgroup>
+                <col className={styles.quotaColSelect} />
                 <col className={styles.quotaColIndex} />
                 <col className={styles.quotaColName} />
                 <col className={styles.quotaColType} />
                 <col className={styles.quotaColSize} />
                 <col className={styles.quotaColModified} />
-                <col className={styles.quotaColPlan} />
-                <col className={styles.quotaColPrimary} />
-                {showSecondaryQuotaColumn ? <col className={styles.quotaColSecondary} /> : null}
-                <col className={styles.quotaColActions} />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th>{t('common.serial_number', { defaultValue: '序号' })}</th>
-                  <th>{t('auth_files.file_name', { defaultValue: '文件名' })}</th>
+              <col className={styles.quotaColPlan} />
+              <col className={styles.quotaColPrimary} />
+              {showSecondaryQuotaColumn ? <col className={styles.quotaColSecondary} /> : null}
+              <col className={styles.quotaColActions} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th className="provider-table-col-select" aria-label={t('ai_providers.list_select_row')} />
+                <th>{t('common.serial_number', { defaultValue: '序号' })}</th>
+                <th>{t('auth_files.file_name', { defaultValue: '文件名' })}</th>
                   <th>{t('auth_files.file_type', { defaultValue: '类型' })}</th>
                   <th>{t('auth_files.file_size', { defaultValue: '大小' })}</th>
                   <th>{t('auth_files.file_modified', { defaultValue: '修改时间' })}</th>
@@ -706,9 +1140,9 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
                         : t('quota_management.detail_col_secondary', { defaultValue: '次限额' })}
                     </th>
                   ) : null}
-                  <th>{t('common.action', { defaultValue: '操作' })}</th>
-                </tr>
-              </thead>
+                <th>{t('common.action', { defaultValue: '操作' })}</th>
+              </tr>
+            </thead>
               <tbody>
                 {pageItems.map((file, index) => {
                   const rowIndex = (currentPage - 1) * pageSize + index + 1;
@@ -718,8 +1152,34 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
                   const antigravityGroups = resolveAntigravityGroups(file.name);
                   const canViewAntigravityDetails =
                     config.type === 'antigravity' && antigravityGroups.length > 0;
+                  const isRuntimeOnly = isRuntimeOnlyAuthFile(file);
+                  const rowSelected = selectedNames.has(file.name);
+                  const rowDisabled = statusOverrides[file.name] ?? file.disabled === true;
                   return (
-                    <tr key={file.name} className={styles.quotaTableRow}>
+                    <tr
+                      key={file.name}
+                      className={`provider-table-row ${styles.quotaTableRow} ${
+                        rowDisabled ? 'provider-table-row-disabled' : ''
+                      } ${rowSelected ? 'provider-table-row-selected' : ''}`.trim()}
+                    >
+                      <td className="provider-table-cell-select">
+                        {!isRuntimeOnly ? (
+                          <input
+                            type="checkbox"
+                            className="provider-list-row-checkbox"
+                            checked={rowSelected}
+                            disabled={disableSelection}
+                            onChange={(event) => {
+                              const checked = event.currentTarget.checked;
+                              const alreadySelected = selectedNames.has(file.name);
+                              if (checked !== alreadySelected) {
+                                toggleSelect(file.name);
+                              }
+                            }}
+                            aria-label={t('ai_providers.list_select_row')}
+                          />
+                        ) : null}
+                      </td>
                       <td className={styles.quotaCellIndex}>{rowIndex}</td>
                       <td className={styles.quotaCellName}>
                         <CountTooltipCell
@@ -763,17 +1223,6 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
                               <IconEye size={14} />
                             </Button>
                           ) : null}
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className={styles.quotaActionButton}
-                            onClick={() => refreshSingleFileQuota(file)}
-                            disabled={disabled || isRefreshing}
-                            title={t('quota_management.refresh_files_and_quota')}
-                            aria-label={t('quota_management.refresh_files_and_quota')}
-                          >
-                            <IconRefreshCw size={14} />
-                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -783,34 +1232,22 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
             </table>
           </div>
 
-          {filteredFiles.length > pageSize ? (
+          {filteredFilesByControls.length > pageSize ? (
             <div className={`provider-list-pagination ${styles.pagination}`}>
-              <span className="provider-list-pagination-meta">
-                {t('auth_files.pagination_info', {
-                  current: currentPage,
-                  total: totalPages,
-                  count: filteredFiles.length
-                })}
-              </span>
               <div className="provider-list-pagination-controls">
-                <div className="provider-list-page-size">
-                  <select
-                    className="input provider-list-page-size-select"
-                    value={pageSize}
-                    onChange={(event) => {
-                      const next = Number(event.target.value);
-                      if (!Number.isFinite(next) || next <= 0 || next > MAX_ITEMS_PER_PAGE) return;
-                      setPageSize(next);
-                    }}
-                  >
-                    {PAGE_SIZE_OPTIONS.map((size) => (
-                      <option key={size} value={size}>
-                        {size}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <Button variant="secondary" size="sm" onClick={goToPrev} disabled={currentPage <= 1}>
+                <span className="provider-list-pagination-meta">
+                  {t('auth_files.pagination_info', {
+                    current: currentPage,
+                    total: totalPages,
+                    count: filteredFilesByControls.length
+                  })}
+                </span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={goToPrev}
+                  disabled={disabled || currentPage <= 1}
+                >
                   {t('auth_files.pagination_prev')}
                 </Button>
                 <div className="provider-list-pagination-pages" aria-label={t('common.pagination', { defaultValue: '分页' })}>
@@ -828,19 +1265,43 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
                       <Button
                         key={item}
                         size="sm"
-                        variant={isActive ? 'primary' : 'secondary'}
-                        className="provider-list-page-button"
-                        onClick={() => setPage(item)}
-                        disabled={isActive}
+                        variant="secondary"
+                        className={`provider-list-page-button ${isActive ? 'provider-list-page-button-current' : ''}`.trim()}
+                        onClick={() => {
+                          if (isActive) return;
+                          setPage(item);
+                        }}
+                        disabled={disabled}
+                        aria-current={isActive ? 'page' : undefined}
                       >
                         {item}
                       </Button>
                     );
                   })}
                 </div>
-                <Button variant="secondary" size="sm" onClick={goToNext} disabled={currentPage >= totalPages}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={goToNext}
+                  disabled={disabled || currentPage >= totalPages}
+                >
                   {t('auth_files.pagination_next')}
                 </Button>
+                <div className="provider-list-page-size">
+                  <Select
+                    value={String(pageSize)}
+                    options={pageSizeSelectOptions}
+                    onChange={(value) => {
+                      const next = Number(value);
+                      if (!Number.isFinite(next) || next <= 0 || next > MAX_ITEMS_PER_PAGE) return;
+                      setPageSize(next);
+                    }}
+                    className="provider-list-page-size-select"
+                    ariaLabel={t('auth_files.page_size_label', { defaultValue: '单页数量' })}
+                    disabled={disabled}
+                    fullWidth={false}
+                  />
+                </div>
               </div>
             </div>
           ) : (
@@ -849,7 +1310,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
                 {t('auth_files.pagination_info', {
                   current: 1,
                   total: 1,
-                  count: filteredFiles.length
+                  count: filteredFilesByControls.length
                 })}
               </span>
             </div>

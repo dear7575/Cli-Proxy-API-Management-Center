@@ -14,7 +14,11 @@ import { ampcodeApi } from '@/services/api';
 import { useAuthStore, useConfigStore, useNotificationStore } from '@/stores';
 import type { AmpcodeConfig } from '@/types';
 import { maskApiKey } from '@/utils/format';
-import { buildAmpcodeFormState, entriesToAmpcodeMappings } from '@/components/providers/utils';
+import {
+  buildAmpcodeFormState,
+  entriesToAmpcodeMappings,
+  entriesToAmpcodeUpstreamApiKeys,
+} from '@/components/providers/utils';
 import type { AmpcodeFormState } from '@/components/providers';
 import layoutStyles from './AiProvidersEditLayout.module.scss';
 import styles from './AiProvidersPage.module.scss';
@@ -36,11 +40,18 @@ const normalizeMappingEntries = (entries: Array<{ name: string; alias: string }>
     return acc;
   }, []);
 
+const normalizeUpstreamApiKeyEntries = (form: AmpcodeFormState) =>
+  entriesToAmpcodeUpstreamApiKeys(form.upstreamApiKeyEntries).map((entry) => ({
+    upstreamApiKey: entry.upstreamApiKey,
+    apiKeys: entry.apiKeys,
+  }));
+
 const buildAmpcodeSignature = (form: AmpcodeFormState) =>
   JSON.stringify({
     upstreamUrl: String(form.upstreamUrl ?? '').trim(),
     upstreamApiKey: String(form.upstreamApiKey ?? '').trim(),
     forceModelMappings: Boolean(form.forceModelMappings),
+    upstreamApiKeys: normalizeUpstreamApiKeyEntries(form),
     modelMappings: normalizeMappingEntries(form.mappingEntries),
   });
 
@@ -59,7 +70,8 @@ export function AiProvidersAmpcodeEditPage() {
   const [form, setForm] = useState<AmpcodeFormState>(() => buildAmpcodeFormState(null));
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [mappingsDirty, setMappingsDirty] = useState(false);
+  const [modelMappingsDirty, setModelMappingsDirty] = useState(false);
+  const [upstreamApiKeysDirty, setUpstreamApiKeysDirty] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [baselineSignature, setBaselineSignature] = useState(() =>
@@ -104,7 +116,8 @@ export function AiProvidersAmpcodeEditPage() {
 
     setLoading(true);
     setLoaded(false);
-    setMappingsDirty(false);
+    setModelMappingsDirty(false);
+    setUpstreamApiKeysDirty(false);
     setError('');
     const initialForm = buildAmpcodeFormState(useConfigStore.getState().config?.ampcode ?? null);
     setForm(initialForm);
@@ -185,6 +198,7 @@ export function AiProvidersAmpcodeEditPage() {
     try {
       const upstreamUrl = form.upstreamUrl.trim();
       const overrideKey = form.upstreamApiKey.trim();
+      const upstreamApiKeys = entriesToAmpcodeUpstreamApiKeys(form.upstreamApiKeyEntries);
       const modelMappings = entriesToAmpcodeMappings(form.mappingEntries);
 
       if (upstreamUrl) {
@@ -195,7 +209,15 @@ export function AiProvidersAmpcodeEditPage() {
 
       await ampcodeApi.updateForceModelMappings(form.forceModelMappings);
 
-      if (loaded || mappingsDirty) {
+      if (loaded || upstreamApiKeysDirty) {
+        if (upstreamApiKeys.length) {
+          await ampcodeApi.saveUpstreamApiKeys(upstreamApiKeys);
+        } else {
+          await ampcodeApi.deleteUpstreamApiKeys([]);
+        }
+      }
+
+      if (loaded || modelMappingsDirty) {
         if (modelMappings.length) {
           await ampcodeApi.saveModelMappings(modelMappings);
         } else {
@@ -209,23 +231,29 @@ export function AiProvidersAmpcodeEditPage() {
 
       const previous = config?.ampcode ?? {};
       const next: AmpcodeConfig = {
-        upstreamUrl: upstreamUrl || undefined,
+        ...previous,
         forceModelMappings: form.forceModelMappings,
       };
 
-      if (previous.upstreamApiKey) {
-        next.upstreamApiKey = previous.upstreamApiKey;
-      }
-
-      if (Array.isArray(previous.modelMappings)) {
-        next.modelMappings = previous.modelMappings;
+      if (upstreamUrl) {
+        next.upstreamUrl = upstreamUrl;
+      } else {
+        delete next.upstreamUrl;
       }
 
       if (overrideKey) {
         next.upstreamApiKey = overrideKey;
       }
 
-      if (loaded || mappingsDirty) {
+      if (loaded || upstreamApiKeysDirty) {
+        if (upstreamApiKeys.length) {
+          next.upstreamApiKeys = upstreamApiKeys;
+        } else {
+          delete next.upstreamApiKeys;
+        }
+      }
+
+      if (loaded || modelMappingsDirty) {
         if (modelMappings.length) {
           next.modelMappings = modelMappings;
         } else {
@@ -249,10 +277,10 @@ export function AiProvidersAmpcodeEditPage() {
   };
 
   const saveAmpcode = async () => {
-    if (!loaded && mappingsDirty) {
+    if (!loaded && (modelMappingsDirty || upstreamApiKeysDirty)) {
       showConfirmation({
-        title: t('ai_providers.ampcode_mappings_overwrite_title', { defaultValue: 'Overwrite Mappings' }),
-        message: t('ai_providers.ampcode_mappings_overwrite_confirm'),
+        title: t('ai_providers.ampcode_lists_overwrite_title'),
+        message: t('ai_providers.ampcode_lists_overwrite_confirm'),
         variant: 'secondary',
         confirmText: t('common.confirm'),
         onConfirm: performSaveAmpcode,
@@ -345,63 +373,125 @@ export function AiProvidersAmpcodeEditPage() {
             </Button>
           </div>
 
-          <div className={styles.modelConfigSection}>
-            <div className={styles.modelConfigHeader}>
-              <HintLabel
-                className={styles.modelConfigTitle}
-                label={t('ai_providers.ampcode_force_model_mappings_label')}
-                hint={t('ai_providers.ampcode_force_model_mappings_hint')}
-              />
-            </div>
-            <ToggleSwitch
-              checked={form.forceModelMappings}
-              onChange={(value) => setForm((prev) => ({ ...prev, forceModelMappings: value }))}
+        <div className="form-group">
+          <div className={layoutStyles.ampcodeUpstreamMappingsHeader}>
+            <label>{t('ai_providers.ampcode_upstream_api_keys_label')}</label>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setUpstreamApiKeysDirty(true);
+                setForm((prev) => ({
+                  ...prev,
+                  upstreamApiKeyEntries: [
+                    ...prev.upstreamApiKeyEntries,
+                    { upstreamApiKey: '', clientApiKeysText: '' },
+                  ],
+                }));
+              }}
               disabled={loading || saving || disableControls}
-            />
+            >
+              {t('ai_providers.ampcode_upstream_api_keys_add_btn')}
+            </Button>
           </div>
-
-          <div className={styles.modelConfigSection}>
-            <div className={styles.modelConfigHeader}>
-              <HintLabel
-                className={styles.modelConfigTitle}
-                label={t('ai_providers.ampcode_model_mappings_label')}
-                hint={t('ai_providers.ampcode_model_mappings_hint')}
-              />
-              <div className={styles.modelConfigToolbar}>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    setMappingsDirty(true);
+          <div className={layoutStyles.ampcodeUpstreamMappingsList}>
+            {(form.upstreamApiKeyEntries.length
+              ? form.upstreamApiKeyEntries
+              : [{ upstreamApiKey: '', clientApiKeysText: '' }]
+            ).map((entry, index, entries) => (
+              <div key={index} className={layoutStyles.ampcodeUpstreamMappingCard}>
+                <div className={layoutStyles.ampcodeUpstreamMappingCardTop}>
+                  <span className={layoutStyles.ampcodeUpstreamMappingTitle}>
+                    {t('ai_providers.ampcode_upstream_api_keys_item_title', { index: index + 1 })}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setUpstreamApiKeysDirty(true);
+                      setForm((prev) => {
+                        const nextEntries = prev.upstreamApiKeyEntries.filter((_, entryIndex) => entryIndex !== index);
+                        return {
+                          ...prev,
+                          upstreamApiKeyEntries: nextEntries.length
+                            ? nextEntries
+                            : [{ upstreamApiKey: '', clientApiKeysText: '' }],
+                        };
+                      });
+                    }}
+                    disabled={loading || saving || disableControls || entries.length <= 1}
+                  >
+                    {t('common.delete')}
+                  </Button>
+                </div>
+                <input
+                  className="input"
+                  placeholder={t('ai_providers.ampcode_upstream_api_keys_upstream_placeholder')}
+                  aria-label={t('ai_providers.ampcode_upstream_api_keys_upstream_placeholder')}
+                  value={entry.upstreamApiKey}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setUpstreamApiKeysDirty(true);
                     setForm((prev) => ({
                       ...prev,
-                      mappingEntries: [...prev.mappingEntries, { name: '', alias: '' }],
+                      upstreamApiKeyEntries: prev.upstreamApiKeyEntries.map((item, itemIndex) =>
+                        itemIndex === index ? { ...item, upstreamApiKey: value } : item
+                      ),
                     }));
                   }}
                   disabled={loading || saving || disableControls}
-                >
-                  {t('ai_providers.ampcode_model_mappings_add_btn')}
-                </Button>
+                />
+                <textarea
+                  className="input"
+                  placeholder={t('ai_providers.ampcode_upstream_api_keys_clients_placeholder')}
+                  aria-label={t('ai_providers.ampcode_upstream_api_keys_clients_placeholder')}
+                  value={entry.clientApiKeysText}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setUpstreamApiKeysDirty(true);
+                    setForm((prev) => ({
+                      ...prev,
+                      upstreamApiKeyEntries: prev.upstreamApiKeyEntries.map((item, itemIndex) =>
+                        itemIndex === index ? { ...item, clientApiKeysText: value } : item
+                      ),
+                    }));
+                  }}
+                  rows={3}
+                  disabled={loading || saving || disableControls}
+                />
               </div>
-            </div>
-            <ModelInputList
-              entries={form.mappingEntries}
-              onChange={(entries) => {
-                setMappingsDirty(true);
-                setForm((prev) => ({ ...prev, mappingEntries: entries }));
-              }}
-              namePlaceholder={t('ai_providers.ampcode_model_mappings_from_placeholder')}
-              aliasPlaceholder={t('ai_providers.ampcode_model_mappings_to_placeholder')}
-              removeButtonTitle={t('common.delete')}
-              removeButtonAriaLabel={t('common.delete')}
-              disabled={loading || saving || disableControls}
-              hideAddButton
-              className={styles.modelInputList}
-              rowClassName={styles.modelInputRow}
-              inputClassName={styles.modelInputField}
-              removeButtonClassName={styles.modelRowRemoveButton}
-            />
+            ))}
           </div>
+          <div className="hint">{t('ai_providers.ampcode_upstream_api_keys_hint')}</div>
+        </div>
+
+        <div className="form-group">
+          <ToggleSwitch
+            label={t('ai_providers.ampcode_force_model_mappings_label')}
+            checked={form.forceModelMappings}
+            onChange={(value) => setForm((prev) => ({ ...prev, forceModelMappings: value }))}
+            disabled={loading || saving || disableControls}
+          />
+          <div className="hint">{t('ai_providers.ampcode_force_model_mappings_hint')}</div>
+        </div>
+
+        <div className="form-group">
+          <label>{t('ai_providers.ampcode_model_mappings_label')}</label>
+          <ModelInputList
+            entries={form.mappingEntries}
+            onChange={(entries) => {
+              setModelMappingsDirty(true);
+              setForm((prev) => ({ ...prev, mappingEntries: entries }));
+            }}
+            addLabel={t('ai_providers.ampcode_model_mappings_add_btn')}
+            namePlaceholder={t('ai_providers.ampcode_model_mappings_from_placeholder')}
+            aliasPlaceholder={t('ai_providers.ampcode_model_mappings_to_placeholder')}
+            removeButtonTitle={t('common.delete')}
+            removeButtonAriaLabel={t('common.delete')}
+            disabled={loading || saving || disableControls}
+          />
+          <div className="hint">{t('ai_providers.ampcode_model_mappings_hint')}</div>
+        </div>
         </div>
       </Card>
     </SecondaryScreenShell>
