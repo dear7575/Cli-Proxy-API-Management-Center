@@ -160,6 +160,12 @@
   justify-content: center;
 }
 
+.sectionRefreshActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .sectionRefreshButton:global(.btn) > span:last-child {
   display: inline-flex;
   align-items: center;
@@ -491,12 +497,17 @@
 }
 
 .quotaTableWrapper {
+  --quota-table-head-height: 48px;
+  --quota-table-row-height: 52px;
+  --quota-table-visible-rows: 10;
   overflow: auto;
   border: 1px solid var(--border-color);
   border-radius: $radius-md;
   background: color-mix(in srgb, var(--bg-primary) 94%, transparent);
   box-shadow: 0 14px 24px -24px rgba(2, 6, 23, 0.72);
-  max-height: calc(48px + 10 * 72px);
+  max-height: calc(
+    var(--quota-table-head-height) + var(--quota-table-visible-rows) * var(--quota-table-row-height)
+  );
 }
 
 .quotaTable {
@@ -574,10 +585,6 @@
   width: 260px;
 }
 
-.quotaColActions {
-  width: 116px;
-}
-
 .quotaTableRow {
   transition: background-color $transition-fast;
 
@@ -596,8 +603,7 @@
 .quotaCellModified,
 .quotaCellPlan,
 .quotaCellPrimary,
-.quotaCellSecondary,
-.quotaCellActions {
+.quotaCellSecondary {
   text-align: center;
   white-space: nowrap;
 }
@@ -673,6 +679,19 @@
   font-weight: 700;
 }
 
+.quotaPlanButton {
+  cursor: pointer;
+  appearance: none;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 34%, var(--border-color));
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--bg-primary));
+  color: color-mix(in srgb, var(--primary-color) 75%, var(--text-primary));
+}
+
+.quotaPlanButton:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary-color) 65%, transparent);
+  outline-offset: 2px;
+}
+
 .quotaCodexEmpty {
   color: var(--text-tertiary);
   font-size: 12px;
@@ -703,22 +722,6 @@
 .quotaCodexReset {
   font-size: 12px;
   color: var(--text-tertiary);
-}
-
-.quotaActionButton:global(.btn.btn-sm) {
-  width: 30px;
-  height: 30px;
-  min-height: 30px;
-  min-width: 30px;
-  padding: 0;
-  gap: 0;
-}
-
-.quotaActionGroup {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
 }
 
 .quotaDetailModal {

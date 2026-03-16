@@ -1338,6 +1338,8 @@
     "refresh_files_and_quota": "Refresh files & quota",
     "card_idle_hint": "Use the top \"Refresh files & quota\" button to fetch the latest quota data.",
     "refresh_filtered": "Refresh filtered",
+    "stop_refresh": "Stop refresh",
+    "filter_error_timeout": "Timeout",
     "filter_error_401": "401 Expired",
     "filter_error_502": "502 Error"
   },

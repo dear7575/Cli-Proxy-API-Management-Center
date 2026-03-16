@@ -1338,6 +1338,8 @@
     "refresh_files_and_quota": "刷新认证文件&额度",
     "card_idle_hint": "请使用顶部“刷新认证文件&额度”按钮获取最新额度。",
     "refresh_filtered": "刷新筛选",
+    "stop_refresh": "停止刷新",
+    "filter_error_timeout": "超时",
     "filter_error_401": "401 过期",
     "filter_error_502": "502 错误"
   },

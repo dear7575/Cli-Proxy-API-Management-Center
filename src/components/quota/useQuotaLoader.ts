@@ -33,6 +33,11 @@ export function useQuotaLoader<TState, TData>(config: QuotaConfig<TState, TData>
   const loadingRef = useRef(false);
   const requestIdRef = useRef(0);
 
+  const cancelLoad = useCallback(() => {
+    requestIdRef.current += 1;
+    loadingRef.current = false;
+  }, []);
+
   const loadQuota = useCallback(
     async (
       targets: AuthFileItem[],
@@ -94,5 +99,5 @@ export function useQuotaLoader<TState, TData>(config: QuotaConfig<TState, TData>
     [config, setQuota, t]
   );
 
-  return { quota, loadQuota };
+  return { quota, loadQuota, cancelLoad };
 }

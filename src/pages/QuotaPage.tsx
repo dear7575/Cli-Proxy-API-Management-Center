@@ -2,7 +2,7 @@
  * Quota management page - coordinates the three quota sections.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useAuthStore } from '@/stores';
@@ -25,6 +25,7 @@ export function QuotaPage() {
   const [files, setFiles] = useState<AuthFileItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const refreshAllHandlersRef = useRef(new Set<(files: AuthFileItem[]) => void | Promise<void>>());
 
   const disableControls = connectionStatus !== 'connected';
 
@@ -40,20 +41,39 @@ export function QuotaPage() {
   const loadFiles = useCallback(async () => {
     setLoading(true);
     setError('');
+    let nextFiles: AuthFileItem[] = [];
     try {
       const data = await authFilesApi.list();
-      setFiles(data?.files || []);
+      nextFiles = data?.files || [];
+      setFiles(nextFiles);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : t('notification.refresh_failed');
       setError(errorMessage);
+      nextFiles = [];
     } finally {
       setLoading(false);
     }
+    return nextFiles;
   }, [t]);
 
+  const registerRefreshAll = useCallback((handler: (files: AuthFileItem[]) => void | Promise<void>) => {
+    refreshAllHandlersRef.current.add(handler);
+    return () => {
+      refreshAllHandlersRef.current.delete(handler);
+    };
+  }, []);
+
+  const runRefreshAll = useCallback(async (latestFiles: AuthFileItem[]) => {
+    const handlers = Array.from(refreshAllHandlersRef.current);
+    if (handlers.length === 0) return;
+    await Promise.allSettled(handlers.map((handler) => Promise.resolve(handler(latestFiles))));
+  }, []);
+
   const handleHeaderRefresh = useCallback(async () => {
-    await Promise.all([loadConfig(), loadFiles()]);
-  }, [loadConfig, loadFiles]);
+    await loadConfig();
+    const latestFiles = await loadFiles();
+    await runRefreshAll(latestFiles);
+  }, [loadConfig, loadFiles, runRefreshAll]);
 
   useHeaderRefresh(handleHeaderRefresh);
 
@@ -77,6 +97,7 @@ export function QuotaPage() {
         loading={loading}
         disabled={disableControls}
         onFilesRefresh={loadFiles}
+        registerRefreshAll={registerRefreshAll}
       />
       <QuotaSection
         config={ANTIGRAVITY_CONFIG}
@@ -84,6 +105,7 @@ export function QuotaPage() {
         loading={loading}
         disabled={disableControls}
         onFilesRefresh={loadFiles}
+        registerRefreshAll={registerRefreshAll}
       />
       <QuotaSection
         config={CODEX_CONFIG}
@@ -91,6 +113,7 @@ export function QuotaPage() {
         loading={loading}
         disabled={disableControls}
         onFilesRefresh={loadFiles}
+        registerRefreshAll={registerRefreshAll}
       />
       <QuotaSection
         config={GEMINI_CLI_CONFIG}
@@ -98,6 +121,7 @@ export function QuotaPage() {
         loading={loading}
         disabled={disableControls}
         onFilesRefresh={loadFiles}
+        registerRefreshAll={registerRefreshAll}
       />
       <QuotaSection
         config={KIMI_CONFIG}
@@ -105,6 +129,7 @@ export function QuotaPage() {
         loading={loading}
         disabled={disableControls}
         onFilesRefresh={loadFiles}
+        registerRefreshAll={registerRefreshAll}
       />
     </div>
   );

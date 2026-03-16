@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
-import { triggerHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useNotificationStore, useQuotaStore, useThemeStore } from '@/stores';
 import type { AuthFileItem, ResolvedTheme, ThemeColors } from '@/types';
 import { TYPE_COLORS, formatKimiResetHint, formatQuotaResetTime } from '@/utils/quota';
@@ -23,7 +22,7 @@ import { CountTooltipCell } from '@/components/providers/CountTooltipCell';
 import { QuotaProgressBar, type QuotaStatusState } from './QuotaCard';
 import { useQuotaLoader } from './useQuotaLoader';
 import type { QuotaConfig } from './quotaConfigs';
-import { IconEye, IconRefreshCw } from '@/components/ui/icons';
+import { IconRefreshCw } from '@/components/ui/icons';
 import { authFilesApi } from '@/services/api';
 import styles from '@/pages/QuotaPage.module.scss';
 import type {
@@ -132,6 +131,7 @@ interface QuotaSectionProps<TState extends QuotaStatusState, TData> {
   loading: boolean;
   disabled: boolean;
   onFilesRefresh?: () => void | Promise<void>;
+  registerRefreshAll?: (handler: (files: AuthFileItem[]) => void | Promise<void>) => () => void;
 }
 
 const resolveQuotaErrorMessage = (
@@ -155,7 +155,8 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   files,
   loading,
   disabled,
-  onFilesRefresh
+  onFilesRefresh,
+  registerRefreshAll
 }: QuotaSectionProps<TState, TData>) {
   const { t } = useTranslation();
   const { showNotification, showConfirmation } = useNotificationStore();
@@ -163,7 +164,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   const setQuota = useQuotaStore((state) => state[config.storeSetter]) as QuotaSetter<
     Record<string, TState>
   >;
-  const { quota, loadQuota } = useQuotaLoader(config);
+  const { quota, loadQuota, cancelLoad } = useQuotaLoader(config);
 
   const filteredFiles = useMemo(() => files.filter((file) => config.filterFn(file)), [
     files,
@@ -173,6 +174,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   const [problemOnly, setProblemOnly] = useState(false);
   const [auth401Only, setAuth401Only] = useState(false);
   const [auth502Only, setAuth502Only] = useState(false);
+  const [timeoutOnly, setTimeoutOnly] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
   const [statusOverrides, setStatusOverrides] = useState<Record<string, boolean>>({});
@@ -222,8 +224,18 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
       const has502 =
         quotaState?.status === 'error' &&
         (quotaState.errorStatus === 502 || errorText.toLowerCase().includes('502'));
+      const hasTimeout =
+        quotaState?.status === 'error' &&
+        (quotaState.errorStatus === 408 ||
+          quotaState.errorStatus === 504 ||
+          quotaState.errorStatus === 524 ||
+          errorText.toLowerCase().includes('timeout'));
+      const errorFiltersActive = auth401Only || auth502Only || timeoutOnly;
       const matchAuthError =
-        (!auth401Only && !auth502Only) || (auth401Only && has401) || (auth502Only && has502);
+        !errorFiltersActive ||
+        (auth401Only && has401) ||
+        (auth502Only && has502) ||
+        (timeoutOnly && hasTimeout);
       const matchSearch =
         !term ||
         item.name.toLowerCase().includes(term) ||
@@ -231,7 +243,17 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
         (item.provider || '').toString().toLowerCase().includes(term);
       return matchType && matchStatus && matchAuthError && matchSearch;
     });
-  }, [filesMatchingProblemFilter, filter, search, statusFilter, auth401Only, auth502Only, quota, statusOverrides]);
+  }, [
+    filesMatchingProblemFilter,
+    filter,
+    search,
+    statusFilter,
+    auth401Only,
+    auth502Only,
+    timeoutOnly,
+    quota,
+    statusOverrides
+  ]);
   const isCodexSection = config.type === 'codex';
   const isAntigravitySection = config.type === 'antigravity';
   const showSecondaryQuotaColumn = !isAntigravitySection;
@@ -299,7 +321,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   useEffect(() => {
     setPage(1);
     setSelectedNames(new Set());
-  }, [filter, problemOnly, auth401Only, auth502Only, search, statusFilter, setPage]);
+  }, [filter, problemOnly, auth401Only, auth502Only, timeoutOnly, search, statusFilter, setPage]);
 
   useEffect(() => {
     if (currentPage <= totalPages) return;
@@ -323,26 +345,8 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
     });
   }, [filteredFilesByControls, selectedNames.size]);
 
-  const pendingQuotaRefreshRef = useRef(false);
-  const prevFilesLoadingRef = useRef(loading);
-
-  const handleRefresh = useCallback(() => {
-    pendingQuotaRefreshRef.current = true;
-    void triggerHeaderRefresh();
-  }, []);
-
-  useEffect(() => {
-    const wasLoading = prevFilesLoadingRef.current;
-    prevFilesLoadingRef.current = loading;
-
-    if (!pendingQuotaRefreshRef.current) return;
-    if (loading) return;
-    if (!wasLoading) return;
-
-    pendingQuotaRefreshRef.current = false;
-    if (pageItems.length === 0) return;
-    loadQuota(pageItems, 'page', setLoading);
-  }, [loading, pageItems, loadQuota, setLoading]);
+  const bulkRefreshTokenRef = useRef(0);
+  const bulkRefreshSnapshotRef = useRef<Record<string, TState | null> | null>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -400,6 +404,13 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
     [pageItems]
   );
   const hasSelection = selectedNames.size > 0;
+  const selectedTargets = useMemo(() => {
+    if (selectedNames.size === 0) return [];
+    const nameIndex = new Map(filteredFilesByControls.map((item) => [item.name, item]));
+    return Array.from(selectedNames)
+      .map((name) => nameIndex.get(name))
+      .filter((item): item is AuthFileItem => Boolean(item));
+  }, [filteredFilesByControls, selectedNames]);
   const isCurrentPageFullySelected =
     selectablePageNames.length > 0 && selectablePageNames.every((name) => selectedNames.has(name));
   const isAllFilteredSelected =
@@ -700,8 +711,22 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
           count: summary.modelCount,
           defaultValue: `${summary.modelCount} 个模型`
         });
+        const canViewDetails = groups.length > 0;
+        const planNode = canViewDetails ? (
+          <button
+            type="button"
+            className={`${styles.quotaPlanBadge} ${styles.quotaPlanButton}`}
+            onClick={() => setAntigravityDetailFileName(file.name)}
+            title={t('quota_management.view_model_quota_detail', { defaultValue: '查看模型额度明细' })}
+            aria-label={t('quota_management.view_model_quota_detail', { defaultValue: '查看模型额度明细' })}
+          >
+            {modelCountLabel}
+          </button>
+        ) : (
+          <span className={styles.quotaPlanBadge}>{modelCountLabel}</span>
+        );
         return {
-          plan: <span className={styles.quotaPlanBadge}>{modelCountLabel}</span>,
+          plan: planNode,
           primary: renderQuotaMetric(toAntigravityMetric(summary.lowestRemainingGroup)),
           secondary: <span className={styles.quotaCodexEmpty}>-</span>
         };
@@ -741,6 +766,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
       resolveCodexPlanLabel,
       renderQuotaMetric,
       resolveAntigravitySummary,
+      setAntigravityDetailFileName,
       t,
       toAntigravityMetric,
       toClaudeMetric,
@@ -785,6 +811,85 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
     if (selectableFilteredNames.length === 0) return;
     applySelection(selectableFilteredNames, !isAllFilteredSelected);
   }, [applySelection, isAllFilteredSelected, selectableFilteredNames]);
+
+  const runBulkRefresh = useCallback(
+    async (targets: AuthFileItem[]) => {
+      if (disabled || bulkRefreshing) return;
+      const uniqueTargets = Array.from(new Map(targets.map((item) => [item.name, item])).values());
+      if (uniqueTargets.length === 0) return;
+
+      const refreshToken = bulkRefreshTokenRef.current + 1;
+      bulkRefreshTokenRef.current = refreshToken;
+      setBulkRefreshing(true);
+      setBulkRefreshProgress({ done: 0, total: uniqueTargets.length });
+
+      const snapshot: Record<string, TState | null> = {};
+      uniqueTargets.forEach((file) => {
+        snapshot[file.name] = quota[file.name] ?? null;
+      });
+      bulkRefreshSnapshotRef.current = snapshot;
+
+      try {
+        for (let index = 0; index < uniqueTargets.length; index += REFRESH_CHUNK_SIZE) {
+          if (bulkRefreshTokenRef.current !== refreshToken) return;
+          const chunk = uniqueTargets.slice(index, index + REFRESH_CHUNK_SIZE);
+          await loadQuota(chunk, 'all', setLoading);
+          if (bulkRefreshTokenRef.current !== refreshToken) return;
+          if (bulkRefreshSnapshotRef.current) {
+            chunk.forEach((file) => {
+              delete bulkRefreshSnapshotRef.current?.[file.name];
+            });
+            if (Object.keys(bulkRefreshSnapshotRef.current).length === 0) {
+              bulkRefreshSnapshotRef.current = null;
+            }
+          }
+          setBulkRefreshProgress({
+            done: Math.min(index + chunk.length, uniqueTargets.length),
+            total: uniqueTargets.length
+          });
+        }
+      } finally {
+        if (bulkRefreshTokenRef.current === refreshToken) {
+          setBulkRefreshing(false);
+          setBulkRefreshProgress(null);
+          bulkRefreshSnapshotRef.current = null;
+        }
+      }
+    },
+    [disabled, bulkRefreshing, loadQuota, quota, setLoading]
+  );
+
+  const stopBulkRefresh = useCallback(() => {
+    if (!bulkRefreshing) return;
+    bulkRefreshTokenRef.current += 1;
+    cancelLoad();
+    setLoading(false);
+    setBulkRefreshing(false);
+    setBulkRefreshProgress(null);
+    const snapshot = bulkRefreshSnapshotRef.current;
+    if (snapshot) {
+      setQuota((prev) => {
+        const next = { ...prev };
+        Object.entries(snapshot).forEach(([name, state]) => {
+          if (state === null) {
+            delete next[name];
+          } else {
+            next[name] = state;
+          }
+        });
+        return next;
+      });
+    }
+    bulkRefreshSnapshotRef.current = null;
+  }, [bulkRefreshing, cancelLoad, setLoading, setQuota]);
+
+  useEffect(() => {
+    if (!registerRefreshAll) return;
+    return registerRefreshAll(async (allFiles) => {
+      const targets = allFiles.filter((file) => config.filterFn(file));
+      await runBulkRefresh(targets);
+    });
+  }, [config.filterFn, registerRefreshAll, runBulkRefresh]);
 
 
   const batchSetStatus = useCallback(
@@ -881,28 +986,6 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
     [disabled, onFilesRefresh, showConfirmation, showNotification, t]
   );
 
-  const refreshFilteredQuota = useCallback(async () => {
-    if (disabled || bulkRefreshing) return;
-    const targets = filteredFilesByControls;
-    if (targets.length === 0) return;
-
-    setBulkRefreshing(true);
-    setBulkRefreshProgress({ done: 0, total: targets.length });
-    try {
-      for (let index = 0; index < targets.length; index += REFRESH_CHUNK_SIZE) {
-        const chunk = targets.slice(index, index + REFRESH_CHUNK_SIZE);
-        await loadQuota(chunk, 'all', setLoading);
-        setBulkRefreshProgress({
-          done: Math.min(index + chunk.length, targets.length),
-          total: targets.length
-        });
-      }
-    } finally {
-      setBulkRefreshing(false);
-      setBulkRefreshProgress(null);
-    }
-  }, [disabled, bulkRefreshing, filteredFilesByControls, loadQuota, setLoading]);
-
   const titleNode = (
     <div className={styles.titleWrapper}>
       <span>{t(`${config.i18nPrefix}.title`)}</span>
@@ -916,24 +999,43 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   const bulkBusy = batchDeleting || batchUpdating || bulkRefreshing;
   const disableBulkControls = disabled || isRefreshing || bulkBusy;
   const disableSelection = disabled || isRefreshing || bulkBusy;
+  const refreshLabel = bulkRefreshProgress
+    ? `${t('common.refresh')} (${bulkRefreshProgress.done}/${bulkRefreshProgress.total})`
+    : t('common.refresh');
+  const handleRefresh = useCallback(() => {
+    if (disabled || isRefreshing) return;
+    if (selectedTargets.length > 0) {
+      void runBulkRefresh(selectedTargets);
+      return;
+    }
+    if (pageItems.length === 0) return;
+    void loadQuota(pageItems, 'page', setLoading);
+  }, [disabled, isRefreshing, loadQuota, pageItems, runBulkRefresh, selectedTargets, setLoading]);
 
   return (
     <Card
       title={titleNode}
       extra={
-        <Button
-          variant="secondary"
-          size="sm"
-          className={styles.sectionRefreshButton}
-          onClick={handleRefresh}
-          disabled={disabled || isRefreshing}
-          loading={isRefreshing}
-          title={t('common.refresh')}
-          aria-label={t('common.refresh')}
-        >
-          {!isRefreshing && <IconRefreshCw size={16} />}
-          <span>{t('common.refresh')}</span>
-        </Button>
+        <div className={styles.sectionRefreshActions}>
+          {bulkRefreshing ? (
+            <Button variant="danger" size="sm" onClick={stopBulkRefresh}>
+              {t('quota_management.stop_refresh', { defaultValue: '停止刷新' })}
+            </Button>
+          ) : null}
+          <Button
+            variant="secondary"
+            size="sm"
+            className={styles.sectionRefreshButton}
+            onClick={handleRefresh}
+            disabled={disabled || isRefreshing}
+            loading={isRefreshing}
+            title={t('common.refresh')}
+            aria-label={t('common.refresh')}
+          >
+            {!isRefreshing && <IconRefreshCw size={16} />}
+            <span>{refreshLabel}</span>
+          </Button>
+        </div>
       }
     >
       <div className={`provider-list-toolbar ${styles.quotaTableToolbar}`}>
@@ -1001,6 +1103,13 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
             >
               {t('quota_management.filter_error_502', { defaultValue: '502' })}
             </Button>
+            <Button
+              size="sm"
+              variant={timeoutOnly ? 'primary' : 'secondary'}
+              onClick={() => setTimeoutOnly((prev) => !prev)}
+            >
+              {t('quota_management.filter_error_timeout', { defaultValue: '超时' })}
+            </Button>
           </div>
           <Button
             variant="ghost"
@@ -1012,6 +1121,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
               setProblemOnly(false);
               setAuth401Only(false);
               setAuth502Only(false);
+              setTimeoutOnly(false);
               setSelectedNames(new Set());
             }}
             className="provider-list-reset-btn"
@@ -1045,17 +1155,6 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
               {isAllFilteredSelected
                 ? t('ai_providers.list_deselect_all', { defaultValue: '取消全部' })
                 : t('ai_providers.list_select_all')}
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => void refreshFilteredQuota()}
-              loading={bulkRefreshing}
-              disabled={disableBulkControls || filteredFilesByControls.length === 0}
-            >
-              {bulkRefreshProgress
-                ? `${t('quota_management.refresh_filtered', { defaultValue: '刷新筛选' })} (${bulkRefreshProgress.done}/${bulkRefreshProgress.total})`
-                : t('quota_management.refresh_filtered', { defaultValue: '刷新筛选' })}
             </Button>
           </div>
           <div className="provider-list-bulk-actions">
@@ -1111,7 +1210,6 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
               <col className={styles.quotaColPlan} />
               <col className={styles.quotaColPrimary} />
               {showSecondaryQuotaColumn ? <col className={styles.quotaColSecondary} /> : null}
-              <col className={styles.quotaColActions} />
             </colgroup>
             <thead>
               <tr>
@@ -1140,7 +1238,6 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
                         : t('quota_management.detail_col_secondary', { defaultValue: '次限额' })}
                     </th>
                   ) : null}
-                <th>{t('common.action', { defaultValue: '操作' })}</th>
               </tr>
             </thead>
               <tbody>
@@ -1149,9 +1246,6 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
                   const displayType = file.type || file.provider || config.type;
                   const typeColor = typeBadgeStyleByFile(file);
                   const splitCells = renderSplitCells(file);
-                  const antigravityGroups = resolveAntigravityGroups(file.name);
-                  const canViewAntigravityDetails =
-                    config.type === 'antigravity' && antigravityGroups.length > 0;
                   const isRuntimeOnly = isRuntimeOnlyAuthFile(file);
                   const rowSelected = selectedNames.has(file.name);
                   const rowDisabled = statusOverrides[file.name] ?? file.disabled === true;
@@ -1208,23 +1302,6 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
                       {showSecondaryQuotaColumn ? (
                         <td className={styles.quotaCellSecondary}>{splitCells.secondary}</td>
                       ) : null}
-                      <td className={styles.quotaCellActions}>
-                        <div className={styles.quotaActionGroup}>
-                          {canViewAntigravityDetails ? (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              className={styles.quotaActionButton}
-                              onClick={() => setAntigravityDetailFileName(file.name)}
-                              disabled={disabled || isRefreshing}
-                              title={t('quota_management.view_model_quota_detail', { defaultValue: '查看模型额度明细' })}
-                              aria-label={t('quota_management.view_model_quota_detail', { defaultValue: '查看模型额度明细' })}
-                            >
-                              <IconEye size={14} />
-                            </Button>
-                          ) : null}
-                        </div>
-                      </td>
                     </tr>
                   );
                 })}
