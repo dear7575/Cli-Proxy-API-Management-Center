@@ -100,7 +100,9 @@
     cursor: pointer;
     font-size: 16px;
     font-weight: bold;
-    transition: background $transition-fast, color $transition-fast;
+    transition:
+      background $transition-fast,
+      color $transition-fast;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -137,7 +139,10 @@
       max-width: 320px;
       opacity: 1;
       transform: translateX(0);
-      transition: max-width 0.4s ease, opacity 0.4s ease, transform 0.4s ease;
+      transition:
+        max-width 0.4s ease,
+        opacity 0.4s ease,
+        transform 0.4s ease;
     }
 
     .brand-abbr {
@@ -145,7 +150,9 @@
       transform: translateX(12px);
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.4s ease, transform 0.4s ease;
+      transition:
+        opacity 0.4s ease,
+        transform 0.4s ease;
     }
 
     &.collapsed {
@@ -239,7 +246,9 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        transition: background-color $transition-fast, color $transition-fast;
+        transition:
+          background-color $transition-fast,
+          color $transition-fast;
 
         &:hover {
           background: var(--bg-secondary);
@@ -297,7 +306,9 @@
         flex-direction: column;
         align-items: center;
         gap: 4px;
-        transition: border-color $transition-fast, background-color $transition-fast;
+        transition:
+          border-color $transition-fast,
+          background-color $transition-fast;
 
         &:hover {
           background: var(--bg-secondary);
@@ -489,6 +500,7 @@
   .nav-item {
     padding: 10px 12px;
     border-radius: $radius-md;
+    border: 1px solid transparent;
     color: var(--text-primary);
     font-weight: 600;
     display: flex;
@@ -519,8 +531,8 @@
     }
 
     .nav-icon {
-      width: 20px;
-      height: 20px;
+      width: 28px;
+      height: 28px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
