@@ -38,7 +38,7 @@ export function QuotaPage() {
     }
   }, [t]);
 
-  const loadFiles = useCallback(async () => {
+  const fetchFiles = useCallback(async () => {
     setLoading(true);
     setError('');
     let nextFiles: AuthFileItem[] = [];
@@ -56,6 +56,10 @@ export function QuotaPage() {
     return nextFiles;
   }, [t]);
 
+  const loadFiles = useCallback(async () => {
+    await fetchFiles();
+  }, [fetchFiles]);
+
   const registerRefreshAll = useCallback((handler: (files: AuthFileItem[]) => void | Promise<void>) => {
     refreshAllHandlersRef.current.add(handler);
     return () => {
@@ -71,9 +75,9 @@ export function QuotaPage() {
 
   const handleHeaderRefresh = useCallback(async () => {
     await loadConfig();
-    const latestFiles = await loadFiles();
+    const latestFiles = await fetchFiles();
     await runRefreshAll(latestFiles);
-  }, [loadConfig, loadFiles, runRefreshAll]);
+  }, [fetchFiles, loadConfig, runRefreshAll]);
 
   useHeaderRefresh(handleHeaderRefresh);
 
