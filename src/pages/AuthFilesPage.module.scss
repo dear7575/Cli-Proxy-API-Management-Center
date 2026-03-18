@@ -15,12 +15,11 @@
   padding: 14px 16px;
   border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
   border-radius: $radius-lg;
-  background:
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--primary-color) 8%, var(--bg-primary)) 0%,
-      color-mix(in srgb, var(--bg-primary) 96%, transparent) 56%
-    );
+  background: linear-gradient(
+                  145deg,
+                  color-mix(in srgb, var(--primary-color) 8%, var(--bg-primary)) 0%,
+                  color-mix(in srgb, var(--bg-primary) 96%, transparent) 56%
+  );
   box-shadow: 0 12px 24px -24px rgba(2, 6, 23, 0.68);
 }
 
@@ -121,20 +120,20 @@
   width: 68px;
 }
 
-.authTableColEnabled {
-  width: 60px;
+.authTableColStatus {
+  width: 110px;
 }
 
 .authTableColActions {
-  width: 232px;
+  width: 292px;
 }
 
 .authTable :global(.provider-table-col-actions) {
-  width: 232px;
+  width: 292px;
 }
 
 .authTable :global(td.provider-table-cell-actions) {
-  min-width: 232px;
+  min-width: 292px;
 }
 
 .authTable :global(.provider-table-actions) {
@@ -145,13 +144,6 @@
 .authTable :global(td.provider-table-cell-status) {
   min-width: 270px;
   width: 270px;
-}
-
-.authTable :global(td.provider-table-cell-switch) {
-  min-width: 60px;
-  width: 60px;
-  padding-left: 8px;
-  padding-right: 8px;
 }
 
 .authTableColName {
@@ -187,6 +179,11 @@
 .authTableCellHealth {
   width: 270px;
   min-width: 270px;
+}
+
+.authTableCellStatus {
+  width: 132px;
+  max-width: 132px;
 }
 
 .authTableNameTrigger {
@@ -243,6 +240,77 @@
   min-width: 256px;
 }
 
+.authTableStatusValue {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 132px;
+  width: 100%;
+  position: relative;
+}
+
+.authTableStatusValue :global(.provider-table-count-trigger) {
+  min-width: 0;
+  padding: 0;
+  text-decoration: none;
+  border-radius: 999px;
+}
+
+.authTableStatusValue :global(.provider-table-count-trigger[aria-expanded='true']) {
+  color: inherit;
+  text-decoration: none;
+}
+
+.authTableStatusTrigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.authTableInlineToggle {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+}
+
+.authTableStatusBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  max-width: 84px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  flex-shrink: 0;
+}
+
+.authTableStatusOk {
+  color: var(--success-color, #22c55e);
+  border-color: color-mix(in srgb, var(--success-color, #22c55e) 35%, transparent);
+  background: color-mix(in srgb, var(--success-color, #22c55e) 10%, transparent);
+}
+
+.authTableStatusError {
+  color: var(--danger-color);
+  border-color: color-mix(in srgb, var(--danger-color) 40%, transparent);
+  background: color-mix(in srgb, var(--danger-color) 12%, transparent);
+}
+
+.authTableStatusWarn {
+  color: var(--warning-color);
+  border-color: color-mix(in srgb, var(--warning-color) 40%, transparent);
+  background: color-mix(in srgb, var(--warning-color) 12%, transparent);
+}
+
+.authTableStatusIdle {
+  color: var(--text-secondary);
+  border-color: color-mix(in srgb, var(--text-secondary) 30%, transparent);
+  background: color-mix(in srgb, var(--text-secondary) 10%, transparent);
+}
+
 .authTableStatusCell .statusBar {
   width: 256px;
   max-width: 256px;
@@ -282,12 +350,11 @@
   cursor: pointer;
   background: color-mix(in srgb, var(--bg-secondary) 86%, transparent);
   border-color: color-mix(in srgb, var(--border-color) 72%, transparent);
-  transition:
-    transform $transition-fast,
-    box-shadow $transition-fast,
-    border-color $transition-fast,
-    background-color $transition-fast,
-    color $transition-fast;
+  transition: transform $transition-fast,
+  box-shadow $transition-fast,
+  border-color $transition-fast,
+  background-color $transition-fast,
+  color $transition-fast;
 
   &:hover {
     transform: translateY(-1px);
@@ -645,19 +712,17 @@
 
 // 单个认证文件卡片
 .fileCard {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--primary-color) 4%, transparent), transparent),
-    var(--bg-primary);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary-color) 4%, transparent), transparent),
+  var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: $radius-lg;
   padding: $spacing-md;
   display: flex;
   flex-direction: column;
   gap: $spacing-sm;
-  transition:
-    transform $transition-fast,
-    box-shadow $transition-fast,
-    border-color $transition-fast;
+  transition: transform $transition-fast,
+  box-shadow $transition-fast,
+  border-color $transition-fast;
 
   &:hover {
     transform: translateY(-2px);

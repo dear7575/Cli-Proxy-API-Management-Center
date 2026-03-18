@@ -1,4 +1,3 @@
-import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@/styles/global.scss';
 import { INLINE_LOGO_JPEG } from '@/assets/logoInline';
@@ -19,7 +18,5 @@ if (faviconEl) {
 }
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>
+  <App />
 );

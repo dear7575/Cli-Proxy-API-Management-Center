@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { authFilesApi } from '@/services/api';
-import { apiClient } from '@/services/api/client';
 import { useNotificationStore } from '@/stores';
 import type { AuthFileItem } from '@/types';
+import { isRetryableRequestError, runTasksWithConcurrency } from '@/utils/batch';
 import { formatFileSize } from '@/utils/format';
 import { MAX_AUTH_FILE_SIZE } from '@/utils/constants';
 import { downloadBlob } from '@/utils/download';
+import { createZipBlob } from '@/utils/zip';
 import {
   getTypeLabel,
   hasAuthFileStatusMessage,
@@ -27,6 +28,7 @@ export type UseAuthFilesDataResult = {
   loading: boolean;
   error: string;
   uploading: boolean;
+  batchDownloading: boolean;
   deleting: string | null;
   deletingAll: boolean;
   statusUpdating: Record<string, boolean>;
@@ -37,6 +39,7 @@ export type UseAuthFilesDataResult = {
   handleDelete: (name: string) => void;
   handleDeleteAll: (options: DeleteAllOptions) => void;
   handleDownload: (name: string) => Promise<void>;
+  handleBatchDownload: (names: string[]) => Promise<void>;
   handleStatusToggle: (item: AuthFileItem, enabled: boolean) => Promise<void>;
   toggleSelect: (name: string) => void;
   selectAllVisible: (visibleFiles: AuthFileItem[]) => void;
@@ -49,6 +52,22 @@ export type UseAuthFilesDataOptions = {
   refreshKeyStats: () => Promise<void>;
 };
 
+const BULK_CONCURRENCY = 4;
+const BULK_RETRY = 2;
+const BULK_RETRY_DELAY_MS = 300;
+
+const createBatchExportFilename = (): string => {
+  const now = new Date();
+  const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
+    now.getDate()
+  ).padStart(2, '0')}`;
+  const time = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(
+    2,
+    '0'
+  )}${String(now.getSeconds()).padStart(2, '0')}`;
+  return `auth-files-${date}-${time}.zip`;
+};
+
 export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFilesDataResult {
   const { refreshKeyStats } = options;
   const { t } = useTranslation();
@@ -58,6 +77,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [batchDownloading, setBatchDownloading] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deletingAll, setDeletingAll] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState<Record<string, boolean>>({});
@@ -357,11 +377,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
   const handleDownload = useCallback(
     async (name: string) => {
       try {
-        const response = await apiClient.getRaw(
-          `/auth-files/download?name=${encodeURIComponent(name)}`,
-          { responseType: 'blob' }
-        );
-        const blob = new Blob([response.data]);
+        const blob = await authFilesApi.downloadBlob(name);
         downloadBlob({ filename: name, blob });
         showNotification(t('auth_files.download_success'), 'success');
       } catch (err: unknown) {
@@ -370,6 +386,90 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
       }
     },
     [showNotification, t]
+  );
+
+  const handleBatchDownload = useCallback(
+    async (names: string[]) => {
+      const uniqueNames = Array.from(new Set(names));
+      if (uniqueNames.length === 0) return;
+
+      if (uniqueNames.length === 1) {
+        await handleDownload(uniqueNames[0]);
+        return;
+      }
+
+      setBatchDownloading(true);
+      try {
+        const results = await runTasksWithConcurrency(
+          uniqueNames,
+          async (name) => {
+            const blob = await authFilesApi.downloadBlob(name);
+            const bytes = new Uint8Array(await blob.arrayBuffer());
+            return { name, data: bytes };
+          },
+          {
+            concurrency: BULK_CONCURRENCY,
+            retry: BULK_RETRY,
+            retryDelayMs: BULK_RETRY_DELAY_MS,
+            shouldRetry: (error) => isRetryableRequestError(error)
+          }
+        );
+
+        const exportedEntries: Array<{ name: string; data: Uint8Array }> = [];
+        results.forEach((result) => {
+          if (result.status === 'fulfilled') {
+            exportedEntries.push(result.value);
+          }
+        });
+        const successCount = exportedEntries.length;
+        const failCount = uniqueNames.length - successCount;
+
+        if (successCount > 0) {
+          const archiveBlob = createZipBlob(exportedEntries);
+          downloadBlob({
+            filename: createBatchExportFilename(),
+            blob: archiveBlob
+          });
+        }
+
+        if (failCount === 0) {
+          showNotification(
+            t('auth_files.batch_export_success', {
+              count: successCount,
+              defaultValue: '已成功导出 {{count}} 个文件'
+            }),
+            'success'
+          );
+          return;
+        }
+
+        if (successCount > 0) {
+          showNotification(
+            t('auth_files.batch_export_partial', {
+              success: successCount,
+              failed: failCount,
+              defaultValue: '批量导出完成，成功 {{success}} 个，失败 {{failed}} 个'
+            }),
+            'warning'
+          );
+          return;
+        }
+
+        const firstError = results.find(
+          (result): result is PromiseRejectedResult => result.status === 'rejected'
+        );
+        const errorMessage =
+          firstError?.reason instanceof Error ? firstError.reason.message : '';
+        const baseMessage = t('auth_files.batch_export_failed', {
+          count: failCount,
+          defaultValue: '批量导出失败，{{count}} 个文件均下载失败'
+        });
+        showNotification(errorMessage ? `${baseMessage}: ${errorMessage}` : baseMessage, 'error');
+      } finally {
+        setBatchDownloading(false);
+      }
+    },
+    [handleDownload, showNotification, t]
   );
 
   const handleStatusToggle = useCallback(
@@ -424,8 +524,15 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
         )
       );
 
-      const results = await Promise.allSettled(
-        uniqueNames.map((name) => authFilesApi.setStatus(name, nextDisabled))
+      const results = await runTasksWithConcurrency(
+        uniqueNames,
+        (name) => authFilesApi.setStatus(name, nextDisabled),
+        {
+          concurrency: BULK_CONCURRENCY,
+          retry: BULK_RETRY,
+          retryDelayMs: BULK_RETRY_DELAY_MS,
+          shouldRetry: (error) => isRetryableRequestError(error)
+        }
       );
 
       let successCount = 0;
@@ -481,8 +588,15 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
         variant: 'danger',
         confirmText: t('common.confirm'),
         onConfirm: async () => {
-          const results = await Promise.allSettled(
-            uniqueNames.map((name) => authFilesApi.deleteFile(name))
+          const results = await runTasksWithConcurrency(
+            uniqueNames,
+            (name) => authFilesApi.deleteFile(name),
+            {
+              concurrency: BULK_CONCURRENCY,
+              retry: BULK_RETRY,
+              retryDelayMs: BULK_RETRY_DELAY_MS,
+              shouldRetry: (error) => isRetryableRequestError(error)
+            }
           );
 
           const deleted: string[] = [];
@@ -540,6 +654,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
     loading,
     error,
     uploading,
+    batchDownloading,
     deleting,
     deletingAll,
     statusUpdating,
@@ -550,6 +665,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
     handleDelete,
     handleDeleteAll,
     handleDownload,
+    handleBatchDownload,
     handleStatusToggle,
     toggleSelect,
     selectAllVisible,

@@ -11,6 +11,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { useNotificationStore, useQuotaStore, useThemeStore } from '@/stores';
 import type { AuthFileItem, ResolvedTheme, ThemeColors } from '@/types';
+import { isRetryableRequestError, runTasksWithConcurrency } from '@/utils/batch';
 import { TYPE_COLORS, formatKimiResetHint, formatQuotaResetTime } from '@/utils/quota';
 import { formatFileSize } from '@/utils/format';
 import {
@@ -48,6 +49,9 @@ const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [10, 30, 50, 100];
 const MAX_ITEMS_PER_PAGE = 100;
 const REFRESH_CHUNK_SIZE = 10;
+const BULK_CONCURRENCY = 4;
+const BULK_RETRY = 2;
+const BULK_RETRY_DELAY_MS = 300;
 
 interface QuotaMetric {
   label: string;
@@ -908,8 +912,15 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
         return next;
       });
       try {
-        const results = await Promise.allSettled(
-          uniqueNames.map((name) => authFilesApi.setStatus(name, nextDisabled))
+        const results = await runTasksWithConcurrency(
+          uniqueNames,
+          (name) => authFilesApi.setStatus(name, nextDisabled),
+          {
+            concurrency: BULK_CONCURRENCY,
+            retry: BULK_RETRY,
+            retryDelayMs: BULK_RETRY_DELAY_MS,
+            shouldRetry: (error) => isRetryableRequestError(error)
+          }
         );
 
         let successCount = 0;
@@ -960,8 +971,15 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
         onConfirm: async () => {
           setBatchDeleting(true);
           try {
-            const results = await Promise.allSettled(
-              uniqueNames.map((name) => authFilesApi.deleteFile(name))
+            const results = await runTasksWithConcurrency(
+              uniqueNames,
+              (name) => authFilesApi.deleteFile(name),
+              {
+                concurrency: BULK_CONCURRENCY,
+                retry: BULK_RETRY,
+                retryDelayMs: BULK_RETRY_DELAY_MS,
+                shouldRetry: (error) => isRetryableRequestError(error)
+              }
             );
             const successCount = results.filter((result) => result.status === 'fulfilled').length;
             const failCount = uniqueNames.length - successCount;

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useInterval } from '@/hooks/useInterval';
@@ -20,15 +21,16 @@ import {
 } from '@/components/ui/icons';
 import { ProviderStatusBar } from '@/components/providers/ProviderStatusBar';
 import { copyToClipboard } from '@/utils/clipboard';
-import { formatFileSize } from '@/utils/format';
 import { calculateStatusBarData, normalizeAuthIndex } from '@/utils/usage';
 import {
   clampCardPageSize,
   formatModified,
+  getAuthFileStatusMessage,
   getTypeColor,
   getTypeLabel,
   hasAuthFileStatusMessage,
   isRuntimeOnlyAuthFile,
+  parsePriorityValue,
   resolveAuthFileStats,
   type ResolvedTheme,
 } from '@/features/authFiles/constants';
@@ -52,8 +54,222 @@ const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [10, 30, 50, 100] as const;
 
 type PaginationItem = number | 'left-ellipsis' | 'right-ellipsis';
-type StatsSortKey = 'success' | 'failure';
+type StatsSortKey = 'success' | 'failure' | 'priority' | 'modified' | 'status';
 type StatsSortDirection = 'desc' | 'asc';
+
+const toPriorityValue = (value: unknown): number | null => {
+  const parsed = parsePriorityValue(value);
+  return parsed === undefined ? null : parsed;
+};
+
+const toSortableTimestamp = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value < 1e12 ? value * 1000 : value;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const directNumber = Number(value);
+    if (Number.isFinite(directNumber)) {
+      return directNumber < 1e12 ? directNumber * 1000 : directNumber;
+    }
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const resolveModifiedSortValue = (file: AuthFileItem): number | null => {
+  const candidates: unknown[] = [
+    file['modtime'],
+    file.modified,
+    file['updated_at'],
+    file['updatedAt'],
+    file['created_at'],
+    file['createdAt']
+  ];
+  for (const candidate of candidates) {
+    const value = toSortableTimestamp(candidate);
+    if (value !== null) return value;
+  }
+  return null;
+};
+
+const normalizeStatusToken = (value: unknown): string => String(value ?? '').trim().toLowerCase();
+
+const resolveStatusLabel = (t: TFunction, rawStatus: string): string => {
+  const normalized = normalizeStatusToken(rawStatus).replace(/[-\s]+/g, '_');
+  if (!normalized) {
+    return t('auth_files.status_value_unknown', { defaultValue: '未知' });
+  }
+  return t(`auth_files.status_value_${normalized}`, { defaultValue: rawStatus });
+};
+
+const resolvePlanTypeLabel = (t: TFunction, rawPlanType: string): string => {
+  const normalized = normalizeStatusToken(rawPlanType);
+  if (!normalized) {
+    return t('auth_files.plan_type_unknown', { defaultValue: '未知套餐' });
+  }
+  return t(`auth_files.plan_type_${normalized}`, { defaultValue: rawPlanType });
+};
+
+const localizeKnownStatusMessage = (t: TFunction, message: string): string => {
+  const raw = String(message ?? '').trim();
+  if (!raw) return '';
+  const normalized = raw.toLowerCase();
+
+  if (normalized.includes('context canceled')) {
+    return t('auth_files.status_error_message_context_canceled', {
+      defaultValue: '请求已取消（上游上下文中断）'
+    });
+  }
+
+  if (normalized.includes('unexpected eof')) {
+    return t('auth_files.status_error_message_unexpected_eof', {
+      defaultValue: '连接意外中断（EOF）'
+    });
+  }
+
+  return raw;
+};
+
+const formatResetAtLabel = (value: unknown): string | null => {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const timestamp = value < 1e12 ? value * 1000 : value;
+    const date = new Date(timestamp);
+    return Number.isNaN(date.getTime()) ? null : date.toLocaleString();
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const asNumber = Number(value);
+    if (Number.isFinite(asNumber)) {
+      const timestamp = asNumber < 1e12 ? asNumber * 1000 : asNumber;
+      const date = new Date(timestamp);
+      return Number.isNaN(date.getTime()) ? null : date.toLocaleString();
+    }
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toLocaleString();
+  }
+  return null;
+};
+
+const summarizeStatusMessage = (t: TFunction, raw: string): string => {
+  const text = raw.trim();
+  if (!text) return '';
+
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    const parsedErrorRecord =
+      parsed && typeof parsed.error === 'object' && parsed.error !== null
+        ? (parsed.error as Record<string, unknown>)
+        : null;
+    const errorType = normalizeStatusToken(parsedErrorRecord?.type);
+    const errorMessage = localizeKnownStatusMessage(
+      t,
+      String(parsedErrorRecord?.message ?? parsed.message ?? '').trim()
+    );
+    const rawPlanType = String(parsedErrorRecord?.plan_type ?? parsed.plan_type ?? '').trim();
+    const resetAtLabel = formatResetAtLabel(parsedErrorRecord?.resets_at ?? parsed.resets_at);
+
+    if (errorType === 'usage_limit_reached') {
+      const planTypeLabel = rawPlanType ? resolvePlanTypeLabel(t, rawPlanType) : '';
+      if (planTypeLabel && resetAtLabel) {
+        return t('auth_files.status_error_usage_limit_reached_with_plan_and_reset', {
+          planType: planTypeLabel,
+          resetAt: resetAtLabel,
+          defaultValue: `${planTypeLabel}额度已用尽，将于 ${resetAtLabel} 重置`
+        });
+      }
+      if (planTypeLabel) {
+        return t('auth_files.status_error_usage_limit_reached_with_plan', {
+          planType: planTypeLabel,
+          defaultValue: `${planTypeLabel}额度已用尽`
+        });
+      }
+      if (resetAtLabel) {
+        return t('auth_files.status_error_usage_limit_reached_with_reset', {
+          resetAt: resetAtLabel,
+          defaultValue: `额度已用尽，将于 ${resetAtLabel} 重置`
+        });
+      }
+      return t('auth_files.status_error_usage_limit_reached', {
+        defaultValue: '当前套餐额度已用尽'
+      });
+    }
+
+    if (errorType) {
+      const typeLabel = t(`auth_files.status_error_type_${errorType}`, {
+        defaultValue: errorType
+      });
+      if (errorMessage) {
+        return t('auth_files.status_error_with_type_message', {
+          type: typeLabel,
+          message: errorMessage,
+          defaultValue: `${typeLabel}: ${errorMessage}`
+        });
+      }
+      return typeLabel;
+    }
+
+    if (errorMessage) return errorMessage;
+  } catch {
+    // noop
+  }
+
+  return localizeKnownStatusMessage(t, text.replace(/\s+/g, ' '));
+};
+
+const compareNullableNumber = (
+  left: number | null,
+  right: number | null,
+  direction: StatsSortDirection
+): number => {
+  if (left === right) return 0;
+  if (left === null) return 1;
+  if (right === null) return -1;
+  return direction === 'asc' ? left - right : right - left;
+};
+
+const compareNullableString = (
+  left: string | null,
+  right: string | null,
+  direction: StatsSortDirection
+): number => {
+  if (left === right) return 0;
+  if (!left) return 1;
+  if (!right) return -1;
+  return direction === 'asc' ? left.localeCompare(right) : right.localeCompare(left);
+};
+
+const isErrorStatus = (status: string): boolean => {
+  const normalized = normalizeStatusToken(status);
+  return (
+    normalized === 'error' ||
+    normalized === 'failed' ||
+    normalized === 'unavailable' ||
+    normalized === 'invalid' ||
+    normalized === 'denied'
+  );
+};
+
+const resolveStatusToneClass = (status: string, stylesRef: Record<string, string>): string => {
+  const normalized = normalizeStatusToken(status);
+  if (
+    normalized === 'success' ||
+    normalized === 'ok' ||
+    normalized === 'healthy' ||
+    normalized === 'ready' ||
+    normalized === 'active' ||
+    normalized === 'enabled'
+  ) {
+    return stylesRef.authTableStatusOk;
+  }
+  if (isErrorStatus(status)) {
+    return stylesRef.authTableStatusError;
+  }
+  if (normalized === 'warning' || normalized === 'retrying' || normalized === 'throttled') {
+    return stylesRef.authTableStatusWarn;
+  }
+  return stylesRef.authTableStatusIdle;
+};
 
 export function AuthFilesPage() {
   const { t } = useTranslation();
@@ -82,6 +298,7 @@ export function AuthFilesPage() {
     loading,
     error,
     uploading,
+    batchDownloading,
     deleting,
     deletingAll,
     statusUpdating,
@@ -92,6 +309,7 @@ export function AuthFilesPage() {
     handleDelete,
     handleDeleteAll,
     handleDownload,
+    handleBatchDownload,
     handleStatusToggle,
     toggleSelect,
     batchSetStatus,
@@ -247,14 +465,40 @@ export function AuthFilesPage() {
     if (!statsSort) return filteredItems;
 
     return [...filteredItems].sort((left, right) => {
-      const leftStats = resolveAuthFileStats(left, keyStats);
-      const rightStats = resolveAuthFileStats(right, keyStats);
-      const delta =
-        statsSort.key === 'success'
-          ? leftStats.success - rightStats.success
-          : leftStats.failure - rightStats.failure;
+      let delta = 0;
+      if (statsSort.key === 'success' || statsSort.key === 'failure') {
+        const leftStats = resolveAuthFileStats(left, keyStats);
+        const rightStats = resolveAuthFileStats(right, keyStats);
+        delta =
+          statsSort.key === 'success'
+            ? leftStats.success - rightStats.success
+            : leftStats.failure - rightStats.failure;
+      } else if (statsSort.key === 'priority') {
+        delta = compareNullableNumber(
+          toPriorityValue(left.priority),
+          toPriorityValue(right.priority),
+          statsSort.direction
+        );
+      } else if (statsSort.key === 'modified') {
+        delta = compareNullableNumber(
+          resolveModifiedSortValue(left),
+          resolveModifiedSortValue(right),
+          statsSort.direction
+        );
+      } else if (statsSort.key === 'status') {
+        delta = compareNullableString(
+          normalizeStatusToken(left.status),
+          normalizeStatusToken(right.status),
+          statsSort.direction
+        );
+      }
+
       if (delta !== 0) {
-        return statsSort.direction === 'asc' ? delta : -delta;
+        return statsSort.key === 'priority' || statsSort.key === 'modified' || statsSort.key === 'status'
+          ? delta
+          : statsSort.direction === 'asc'
+            ? delta
+            : -delta;
       }
       return left.name.localeCompare(right.name);
     });
@@ -292,6 +536,7 @@ export function AuthFilesPage() {
 
   const selectedNames = useMemo(() => Array.from(selectedFiles), [selectedFiles]);
   const hasSelection = selectedNames.length > 0;
+  const bulkActionsDisabled = disableControls || batchDownloading;
 
   const isCurrentPageFullySelected =
     selectablePageNames.length > 0 && selectablePageNames.every((name) => selectedFiles.has(name));
@@ -578,9 +823,17 @@ export function AuthFilesPage() {
             </div>
             <div className="provider-list-bulk-actions">
               <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void handleBatchDownload(selectedNames)}
+                disabled={bulkActionsDisabled || !hasSelection}
+              >
+                {t('auth_files.batch_export', { defaultValue: '批量导出' })}
+              </Button>
+              <Button
                 size="sm"
                 onClick={() => void batchSetStatus(selectedNames, true)}
-                disabled={disableControls || !hasSelection}
+                disabled={bulkActionsDisabled || !hasSelection}
               >
                 {t('auth_files.batch_enable')}
               </Button>
@@ -588,7 +841,7 @@ export function AuthFilesPage() {
                 variant="secondary"
                 size="sm"
                 onClick={() => void batchSetStatus(selectedNames, false)}
-                disabled={disableControls || !hasSelection}
+                disabled={bulkActionsDisabled || !hasSelection}
               >
                 {t('auth_files.batch_disable')}
               </Button>
@@ -596,7 +849,7 @@ export function AuthFilesPage() {
                 variant="danger"
                 size="sm"
                 onClick={() => batchDelete(selectedNames)}
-                disabled={disableControls || !hasSelection}
+                disabled={bulkActionsDisabled || !hasSelection}
               >
                 {t('common.delete')}
               </Button>
@@ -623,8 +876,8 @@ export function AuthFilesPage() {
                 <col className={styles.authTableColModified} />
                 <col className={styles.authTableColSuccess} />
                 <col className={styles.authTableColFailure} />
+                <col className={styles.authTableColStatus} />
                 <col className={styles.authTableColHealth} />
-                <col className={styles.authTableColEnabled} />
                 <col className={styles.authTableColActions} />
               </colgroup>
               <thead>
@@ -637,8 +890,30 @@ export function AuthFilesPage() {
                     {t('auth_files.file_name', { defaultValue: '文件名' })}
                   </th>
                   <th className={styles.authTableColType}>{t('auth_files.file_type', { defaultValue: '类型' })}</th>
-                  <th className={styles.authTableColSize}>{t('auth_files.file_size')}</th>
-                  <th className={styles.authTableColModified}>{t('auth_files.file_modified')}</th>
+                  <th
+                    className={styles.authTableColSize}
+                    aria-sort={statsSort?.key === 'priority' ? (statsSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  >
+                    <button
+                      type="button"
+                      className={styles.authTableSortButton}
+                      onClick={() => toggleStatsSort('priority')}
+                    >
+                      {getStatsSortLabel('priority', t('common.priority'))}
+                    </button>
+                  </th>
+                  <th
+                    className={styles.authTableColModified}
+                    aria-sort={statsSort?.key === 'modified' ? (statsSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  >
+                    <button
+                      type="button"
+                      className={styles.authTableSortButton}
+                      onClick={() => toggleStatsSort('modified')}
+                    >
+                      {getStatsSortLabel('modified', t('auth_files.file_modified'))}
+                    </button>
+                  </th>
                   <th aria-sort={statsSort?.key === 'success' ? (statsSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
                     <button
                       type="button"
@@ -657,8 +932,19 @@ export function AuthFilesPage() {
                       {getStatsSortLabel('failure', t('stats.failure'))}
                     </button>
                   </th>
+                  <th
+                    className={styles.authTableColStatus}
+                    aria-sort={statsSort?.key === 'status' ? (statsSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  >
+                    <button
+                      type="button"
+                      className={styles.authTableSortButton}
+                      onClick={() => toggleStatsSort('status')}
+                    >
+                      {getStatsSortLabel('status', t('auth_files.status_column', { defaultValue: '状态' }))}
+                    </button>
+                  </th>
                   <th className={styles.authTableColHealth}>{t('auth_files.health_status_label')}</th>
-                  <th>{t('auth_files.status_toggle_label')}</th>
                   <th className="provider-table-col-actions">{t('common.action')}</th>
                 </tr>
               </thead>
@@ -676,7 +962,13 @@ export function AuthFilesPage() {
                   const authIndexKey = normalizeAuthIndex(rawAuthIndex);
                   const statusData =
                     (authIndexKey && statusBarCache.get(authIndexKey)) || calculateStatusBarData([]);
-                  const rawStatusMessage = String(file['status_message'] ?? file.statusMessage ?? '').trim();
+                  const rawStatusMessage = getAuthFileStatusMessage(file);
+                  const statusSummary = summarizeStatusMessage(t, rawStatusMessage);
+                  const statusRaw = String(file.status ?? '').trim();
+                  const statusLabel = resolveStatusLabel(t, statusRaw);
+                  const statusToneClass = resolveStatusToneClass(statusRaw, styles);
+                  const showStatusErrorTooltip = isErrorStatus(statusRaw) && Boolean(statusSummary);
+                  const priorityValue = toPriorityValue(file.priority);
 
                   return (
                     <tr
@@ -721,7 +1013,7 @@ export function AuthFilesPage() {
                       <td
                         className={`provider-table-cell-numeric ${styles.authTableCenterCell} ${styles.authTableCellSize}`}
                       >
-                        {file.size ? formatFileSize(file.size) : '-'}
+                        {priorityValue === null ? '-' : priorityValue}
                       </td>
                       <td
                         className={`provider-table-cell-nowrap ${styles.authTableCenterCell} ${styles.authTableCellModified}`}
@@ -736,18 +1028,30 @@ export function AuthFilesPage() {
                       <td
                         className={`provider-table-cell-numeric provider-table-cell-failure ${styles.authTableCenterCell}`}
                       >
-                        {rawStatusMessage && stats.failure > 0 ? (
-                          <CountTooltipCell
-                            items={[rawStatusMessage]}
-                            tone="warning"
-                            triggerLabel={stats.failure}
-                            triggerAriaLabel={t('auth_files.failure_logs', {
-                              defaultValue: '查看失败日志',
-                            })}
-                          />
-                        ) : (
-                          stats.failure
-                        )}
+                        {stats.failure}
+                      </td>
+                      <td className={`${styles.authTableCenterCell} ${styles.authTableCellStatus}`}>
+                        <div className={styles.authTableStatusValue}>
+                          {showStatusErrorTooltip ? (
+                            <CountTooltipCell
+                              items={[statusSummary]}
+                              tone="warning"
+                              triggerLabel={
+                                <span className={`${styles.authTableStatusBadge} ${statusToneClass}`}>
+                                  {statusLabel}
+                                </span>
+                              }
+                              triggerClassName={styles.authTableStatusTrigger}
+                              triggerAriaLabel={t('auth_files.failure_logs', {
+                                defaultValue: '查看失败日志'
+                              })}
+                            />
+                          ) : (
+                            <span className={`${styles.authTableStatusBadge} ${statusToneClass}`}>
+                              {statusLabel}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td
                         className={`provider-table-cell-status ${styles.authTableCenterCell} ${styles.authTableCellHealth}`}
@@ -755,18 +1059,6 @@ export function AuthFilesPage() {
                         <div className={styles.authTableStatusCell}>
                           <ProviderStatusBar statusData={statusData} styles={styles} />
                         </div>
-                      </td>
-                      <td className={`provider-table-cell-switch ${styles.authTableCenterCell}`}>
-                        {!isRuntimeOnly ? (
-                          <ToggleSwitch
-                            ariaLabel={t('auth_files.status_toggle_label')}
-                            checked={!file.disabled}
-                            disabled={disableControls || statusUpdating[file.name] === true}
-                            onChange={(value) => void handleStatusToggle(file, value)}
-                          />
-                        ) : (
-                          <span className={styles.virtualBadge}>{t('auth_files.type_virtual')}</span>
-                        )}
                       </td>
                       <td className="provider-table-cell-actions">
                         <div className="provider-table-actions">
@@ -830,6 +1122,18 @@ export function AuthFilesPage() {
                               </Button>
                             </>
                           ) : null}
+                          {!isRuntimeOnly ? (
+                            <div className={styles.authTableInlineToggle}>
+                              <ToggleSwitch
+                                ariaLabel={t('auth_files.status_toggle_label')}
+                                checked={!file.disabled}
+                                disabled={disableControls || statusUpdating[file.name] === true}
+                                onChange={(value) => void handleStatusToggle(file, value)}
+                              />
+                            </div>
+                          ) : (
+                            <span className={styles.virtualBadge}>{t('auth_files.type_virtual')}</span>
+                          )}
                         </div>
                       </td>
                     </tr>
