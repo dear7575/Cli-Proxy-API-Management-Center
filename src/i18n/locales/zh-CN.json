@@ -600,6 +600,7 @@
     "status_error_with_type_message": "{{type}}：{{message}}",
     "status_error_message_context_canceled": "请求已取消（上游上下文中断）",
     "status_error_message_unexpected_eof": "连接意外中断（EOF）",
+    "status_error_message_io_timeout": "连接超时（目标服务无响应）",
     "status_error_usage_limit_reached": "当前套餐额度已用尽",
     "status_error_usage_limit_reached_with_plan": "{{planType}}额度已用尽",
     "status_error_usage_limit_reached_with_reset": "额度已用尽，将于 {{resetAt}} 重置",

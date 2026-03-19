@@ -57,8 +57,15 @@ const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [10, 30, 50, 100] as const;
 
 type PaginationItem = number | 'left-ellipsis' | 'right-ellipsis';
-type StatsSortKey = 'success' | 'failure' | 'priority' | 'modified' | 'status';
+type StatsSortKey = 'success' | 'failure' | 'priority' | 'modified' | 'status' | 'health';
 type StatsSortDirection = 'desc' | 'asc';
+type AuthFileStatusData = ReturnType<typeof calculateStatusBarData>;
+
+interface HealthSortMeta {
+  successRate: number | null;
+  totalRequests: number;
+  latestActiveBlock: number | null;
+}
 
 const toPriorityValue = (value: unknown): number | null => {
   const parsed = parsePriorityValue(value);
@@ -128,6 +135,12 @@ const localizeKnownStatusMessage = (t: TFunction, message: string): string => {
   if (normalized.includes('unexpected eof')) {
     return t('auth_files.status_error_message_unexpected_eof', {
       defaultValue: '连接意外中断（EOF）'
+    });
+  }
+
+  if (normalized.includes('i/o timeout') || normalized.includes('context deadline exceeded')) {
+    return t('auth_files.status_error_message_io_timeout', {
+      defaultValue: '连接超时（目标服务无响应）'
     });
   }
 
@@ -240,6 +253,59 @@ const compareNullableString = (
   if (!left) return 1;
   if (!right) return -1;
   return direction === 'asc' ? left.localeCompare(right) : right.localeCompare(left);
+};
+
+const resolveHealthSortMeta = (
+  file: AuthFileItem,
+  statusBarCache: Map<string, AuthFileStatusData>
+): HealthSortMeta => {
+  const rawAuthIndex = file['auth_index'] ?? file.authIndex;
+  const authIndexKey = normalizeAuthIndex(rawAuthIndex);
+  const statusData = (authIndexKey && statusBarCache.get(authIndexKey)) || calculateStatusBarData([]);
+  const totalRequests = statusData.totalSuccess + statusData.totalFailure;
+  const successRate = totalRequests > 0 ? statusData.successRate : null;
+
+  let latestActiveBlock: number | null = null;
+  for (let index = statusData.blockDetails.length - 1; index >= 0; index -= 1) {
+    const detail = statusData.blockDetails[index];
+    if (detail.success + detail.failure > 0) {
+      latestActiveBlock = index;
+      break;
+    }
+  }
+
+  return {
+    successRate,
+    totalRequests,
+    latestActiveBlock
+  };
+};
+
+const compareHealthSortMeta = (
+  left: HealthSortMeta,
+  right: HealthSortMeta,
+  direction: StatsSortDirection
+): number => {
+  if (left.successRate === null && right.successRate !== null) return 1;
+  if (right.successRate === null && left.successRate !== null) return -1;
+
+  const order = direction === 'asc' ? 1 : -1;
+  if (left.successRate !== null && right.successRate !== null && left.successRate !== right.successRate) {
+    return order * (left.successRate - right.successRate);
+  }
+  if (left.totalRequests !== right.totalRequests) {
+    return order * (left.totalRequests - right.totalRequests);
+  }
+  if (left.latestActiveBlock === null && right.latestActiveBlock !== null) return 1;
+  if (right.latestActiveBlock === null && left.latestActiveBlock !== null) return -1;
+  if (
+    left.latestActiveBlock !== null &&
+    right.latestActiveBlock !== null &&
+    left.latestActiveBlock !== right.latestActiveBlock
+  ) {
+    return order * (left.latestActiveBlock - right.latestActiveBlock);
+  }
+  return 0;
 };
 
 const isErrorStatus = (status: string): boolean => {
@@ -447,6 +513,13 @@ export function AuthFilesPage() {
       })),
     [t]
   );
+  const healthSortMeta = useMemo(() => {
+    const cache = new Map<string, HealthSortMeta>();
+    filesMatchingProblemFilter.forEach((file) => {
+      cache.set(file.name, resolveHealthSortMeta(file, statusBarCache));
+    });
+    return cache;
+  }, [filesMatchingProblemFilter, statusBarCache]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -494,10 +567,14 @@ export function AuthFilesPage() {
           normalizeStatusToken(right.status),
           statsSort.direction
         );
+      } else if (statsSort.key === 'health') {
+        const leftHealth = healthSortMeta.get(left.name) || resolveHealthSortMeta(left, statusBarCache);
+        const rightHealth = healthSortMeta.get(right.name) || resolveHealthSortMeta(right, statusBarCache);
+        delta = compareHealthSortMeta(leftHealth, rightHealth, statsSort.direction);
       }
 
       if (delta !== 0) {
-        return statsSort.key === 'priority' || statsSort.key === 'modified' || statsSort.key === 'status'
+        return statsSort.key === 'priority' || statsSort.key === 'modified' || statsSort.key === 'status' || statsSort.key === 'health'
           ? delta
           : statsSort.direction === 'asc'
             ? delta
@@ -505,7 +582,7 @@ export function AuthFilesPage() {
       }
       return left.name.localeCompare(right.name);
     });
-  }, [filesMatchingProblemFilter, filter, keyStats, search, statsSort, statusFilter]);
+  }, [filesMatchingProblemFilter, filter, healthSortMeta, keyStats, search, statsSort, statusBarCache, statusFilter]);
 
   const toggleStatsSort = useCallback((key: StatsSortKey) => {
     setStatsSort((prev) => {
@@ -947,7 +1024,18 @@ export function AuthFilesPage() {
                       {getStatsSortLabel('status', t('auth_files.status_column', { defaultValue: '状态' }))}
                     </button>
                   </th>
-                  <th className={styles.authTableColHealth}>{t('auth_files.health_status_label')}</th>
+                  <th
+                    className={styles.authTableColHealth}
+                    aria-sort={statsSort?.key === 'health' ? (statsSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  >
+                    <button
+                      type="button"
+                      className={styles.authTableSortButton}
+                      onClick={() => toggleStatsSort('health')}
+                    >
+                      {getStatsSortLabel('health', t('auth_files.health_status_label'))}
+                    </button>
+                  </th>
                   <th className="provider-table-col-actions">{t('common.action')}</th>
                 </tr>
               </thead>

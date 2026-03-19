@@ -600,6 +600,7 @@
     "status_error_with_type_message": "{{type}}: {{message}}",
     "status_error_message_context_canceled": "Запрос отменен (контекст upstream прерван)",
     "status_error_message_unexpected_eof": "Соединение неожиданно прервано (EOF)",
+    "status_error_message_io_timeout": "Тайм-аут соединения (целевой сервис не ответил)",
     "status_error_usage_limit_reached": "Лимит использования исчерпан",
     "status_error_usage_limit_reached_with_plan": "Лимит тарифа {{planType}} исчерпан",
     "status_error_usage_limit_reached_with_reset": "Лимит исчерпан, сброс в {{resetAt}}",

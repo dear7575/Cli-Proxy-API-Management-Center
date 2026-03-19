@@ -600,6 +600,7 @@
     "status_error_with_type_message": "{{type}}: {{message}}",
     "status_error_message_context_canceled": "Request canceled (upstream context canceled)",
     "status_error_message_unexpected_eof": "Connection closed unexpectedly (EOF)",
+    "status_error_message_io_timeout": "Connection timed out (target service did not respond)",
     "status_error_usage_limit_reached": "Usage limit has been reached",
     "status_error_usage_limit_reached_with_plan": "{{planType}} usage limit has been reached",
     "status_error_usage_limit_reached_with_reset": "Usage limit reached, resets at {{resetAt}}",
