@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { IconChevronDown } from './icons';
 import styles from './Select.module.scss';
 
@@ -40,11 +41,19 @@ export function Select({
   const [open, setOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+  const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(
+    null
+  );
 
   useEffect(() => {
     if (!open || disabled) return;
     const handleClickOutside = (event: MouseEvent) => {
-      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (wrapRef.current?.contains(target)) return;
+      if (dropdownRef.current?.contains(target)) return;
+      setOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -57,6 +66,30 @@ export function Select({
   const selected = selectedIndex >= 0 ? options[selectedIndex] : undefined;
   const displayText = selected?.label ?? placeholder ?? '';
   const isPlaceholder = !selected && placeholder;
+  const canUsePortal = typeof document !== 'undefined' && Boolean(document.body);
+
+  const updateDropdownRect = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    setDropdownRect({
+      top: rect.bottom + 6,
+      left: rect.left,
+      width: rect.width,
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isOpen || !canUsePortal) return;
+    updateDropdownRect();
+    const onLayoutChange = () => updateDropdownRect();
+    window.addEventListener('resize', onLayoutChange);
+    window.addEventListener('scroll', onLayoutChange, true);
+    return () => {
+      window.removeEventListener('resize', onLayoutChange);
+      window.removeEventListener('scroll', onLayoutChange, true);
+    };
+  }, [canUsePortal, isOpen, updateDropdownRect]);
 
   const commitSelection = useCallback(
     (nextIndex: number) => {
@@ -142,6 +175,7 @@ export function Select({
       ref={wrapRef}
     >
       <button
+        ref={triggerRef}
         id={selectId}
         type="button"
         className={styles.trigger}
@@ -167,7 +201,44 @@ export function Select({
           <IconChevronDown size={14} />
         </span>
       </button>
-      {isOpen && (
+      {isOpen &&
+        (canUsePortal && dropdownRect
+          ? createPortal(
+              <div
+                ref={dropdownRef}
+                className={`${styles.dropdown} ${styles.dropdownFloating}`}
+                style={{
+                  top: `${dropdownRect.top}px`,
+                  left: `${dropdownRect.left}px`,
+                  width: `${dropdownRect.width}px`,
+                }}
+                id={listboxId}
+                role="listbox"
+                aria-label={ariaLabel}
+              >
+                {options.map((opt, index) => {
+                  const active = opt.value === value;
+                  const highlighted = index === resolvedHighlightedIndex;
+                  return (
+                    <button
+                      key={opt.value}
+                      id={`${selectId}-option-${index}`}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      className={`${styles.option} ${active ? styles.optionActive : ''} ${highlighted ? styles.optionHighlighted : ''}`.trim()}
+                      onMouseEnter={() => setHighlightedIndex(index)}
+                      onKeyDown={handleKeyDown}
+                      onClick={() => commitSelection(index)}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>,
+              document.body
+            )
+          : (
         <div className={styles.dropdown} id={listboxId} role="listbox" aria-label={ariaLabel}>
           {options.map((opt, index) => {
             const active = opt.value === value;
@@ -186,10 +257,10 @@ export function Select({
               >
                 {opt.label}
               </button>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+            ))}
     </div>
   );
 }

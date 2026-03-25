@@ -28,7 +28,8 @@
 
 .formCard {
   position: relative;
-  overflow: hidden;
+  isolation: isolate;
+  overflow: visible !important;
   padding: clamp(16px, 2vw, 22px);
 
   &::after {
@@ -36,6 +37,7 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
+    z-index: -1;
     background:
       linear-gradient(
         140deg,

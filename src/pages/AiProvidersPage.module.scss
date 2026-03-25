@@ -1048,6 +1048,8 @@
 }
 
 .modelTestPanel {
+  position: relative;
+  z-index: 12;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -1090,6 +1092,8 @@
 }
 
 .modelTestControls {
+  position: relative;
+  z-index: 13;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -1249,6 +1253,8 @@
 }
 
 .openaiTestSelect {
+  position: relative;
+  z-index: 6;
   flex: 1 1 260px;
   min-width: 180px;
   max-width: 380px;
