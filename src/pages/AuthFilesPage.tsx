@@ -144,6 +144,30 @@ const localizeKnownStatusMessage = (t: TFunction, message: string): string => {
     });
   }
 
+  if (
+    normalized.includes('connection refused') ||
+    normalized.includes('upstream connect error') ||
+    normalized.includes('disconnect/reset before headers') ||
+    normalized.includes('remote connection failure') ||
+    normalized.includes('delayed connect error')
+  ) {
+    return t('auth_files.status_error_message_connection_refused', {
+      defaultValue: '目标服务拒绝连接（上游不可达）'
+    });
+  }
+
+  if (normalized.includes('connection reset by peer') || normalized.includes('read: connection reset')) {
+    return t('auth_files.status_error_message_connection_reset_by_peer', {
+      defaultValue: '连接被对端重置（连接中断）'
+    });
+  }
+
+  if (normalized.includes('invalidated oauth token') || normalized.includes('invalid oauth token')) {
+    return t('auth_files.status_error_message_invalid_oauth_token', {
+      defaultValue: 'OAuth 令牌已失效（请重新认证）'
+    });
+  }
+
   return raw;
 };
 
